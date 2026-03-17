@@ -42,7 +42,7 @@ export const categorySchema = z.object({
 });
 
 export const testCaseSchema = z.object({
-  id: z.string().regex(/^[a-z0-9]+-\d{3}$/, 'Test case ID must match pattern: prefix-NNN (e.g. auth-001)'),
+  id: z.string().regex(/^[a-z][a-z0-9-]*-\d{3}$/, 'Test case ID must match pattern: prefix-NNN (e.g. auth-001, user-auth-001)'),
   title: z.string().min(1),
   category: z.string().min(1),
   priority: testCasePrioritySchema,

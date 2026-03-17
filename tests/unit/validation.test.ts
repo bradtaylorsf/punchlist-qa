@@ -128,6 +128,18 @@ describe('cross-field validation', () => {
     expect(result.valid).toBe(true);
   });
 
+  it('should pass with hyphenated category names', () => {
+    const config = {
+      ...baseConfig,
+      categories: [{ id: 'user-auth', label: 'User Auth' }],
+      testCases: [
+        { id: 'user-auth-001', title: 'Login test', category: 'user-auth', priority: 'high', instructions: 'Login', expectedResult: 'Success' },
+      ],
+    };
+    const result = validateConfig(config);
+    expect(result.valid).toBe(true);
+  });
+
   it('should pass with empty categories and empty test cases', () => {
     const config = { ...baseConfig, categories: [], testCases: [] };
     const result = validateConfig(config);

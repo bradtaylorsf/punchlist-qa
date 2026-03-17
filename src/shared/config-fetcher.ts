@@ -52,7 +52,7 @@ export class ConfigFetcher {
       }
     }
 
-    const url = `https://api.github.com/repos/${this.owner}/${this.repo}/contents/punchlist.config.json?ref=${this.branch}`;
+    const url = `https://api.github.com/repos/${this.owner}/${this.repo}/contents/punchlist.config.json?ref=${encodeURIComponent(this.branch)}`;
 
     let res: Response;
     try {
@@ -77,9 +77,12 @@ export class ConfigFetcher {
       );
     }
 
+    // Note: 403 can also indicate insufficient token permissions, but we treat
+    // it as rate-limited since that's the most common 403 cause with the GitHub API.
+    // Callers can inspect the error message for more context.
     if (res.status === 403 || res.status === 429) {
       throw new ConfigFetcherError(
-        'GitHub API rate limit exceeded',
+        `GitHub API rate limit or access denied (${res.status})`,
         'RATE_LIMITED',
       );
     }

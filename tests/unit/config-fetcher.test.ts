@@ -35,6 +35,7 @@ describe('ConfigFetcher', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
