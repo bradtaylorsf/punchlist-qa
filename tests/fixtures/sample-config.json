@@ -17,6 +17,7 @@
     "corsDomains": ["http://localhost:3000"]
   },
   "aiTool": "claude-code",
+  "categories": [],
   "testCases": [],
   "testers": []
 }

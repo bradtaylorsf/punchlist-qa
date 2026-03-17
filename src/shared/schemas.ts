@@ -9,6 +9,7 @@ export const aiToolChoiceSchema = z.enum(['claude-code', 'codex', 'none']);
 export const widgetPositionSchema = z.enum(['bottom-right', 'bottom-left', 'top-right', 'top-left']);
 export const widgetThemeSchema = z.enum(['light', 'dark']);
 export const testResultStatusSchema = z.enum(['pass', 'fail', 'skip', 'blocked']);
+export const testCasePrioritySchema = z.enum(['high', 'medium', 'low']);
 
 // --- Sub-schemas ---
 
@@ -30,13 +31,21 @@ export const widgetConfigSchema = z.object({
   position: widgetPositionSchema,
   theme: widgetThemeSchema,
   corsDomains: z.array(z.string()),
+  categories: z.array(z.string()).default([]),
+});
+
+export const categorySchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().optional(),
 });
 
 export const testCaseSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().regex(/^[a-z0-9]+-\d{3}$/, 'Test case ID must match pattern: prefix-NNN (e.g. auth-001)'),
   title: z.string().min(1),
-  module: z.string(),
-  steps: z.array(z.string()),
+  category: z.string().min(1),
+  priority: testCasePrioritySchema,
+  instructions: z.string().min(1),
   expectedResult: z.string(),
 });
 
@@ -71,6 +80,7 @@ export const punchlistConfigSchema = z.object({
   auth: authConfigSchema,
   widget: widgetConfigSchema,
   aiTool: aiToolChoiceSchema,
+  categories: z.array(categorySchema).default([]),
   testCases: z.array(testCaseSchema),
   testers: z.array(testerSchema),
 });
@@ -90,3 +100,5 @@ export type IssueTrackerType = z.infer<typeof issueTrackerTypeSchema>;
 export type StorageAdapterType = z.infer<typeof storageAdapterTypeSchema>;
 export type AuthAdapterType = z.infer<typeof authAdapterTypeSchema>;
 export type AIToolChoice = z.infer<typeof aiToolChoiceSchema>;
+export type Category = z.infer<typeof categorySchema>;
+export type TestCasePriority = z.infer<typeof testCasePrioritySchema>;

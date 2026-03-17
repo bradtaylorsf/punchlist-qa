@@ -24,8 +24,9 @@ describe('config', () => {
     issueTracker: { type: 'github', repo: 'owner/repo' },
     storage: { type: 'sqlite', path: './punchlist.db' },
     auth: { type: 'token' },
-    widget: { position: 'bottom-right', theme: 'light', corsDomains: ['http://localhost:3000'] },
+    widget: { position: 'bottom-right', theme: 'light', corsDomains: ['http://localhost:3000'], categories: [] },
     aiTool: 'claude-code',
+    categories: [],
     testCases: [],
     testers: [],
   };
