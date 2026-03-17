@@ -20,5 +20,36 @@
   "type": "module",
   "engines": {
     "node": ">=18"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "punchlist-qa": "./bin/punchlist.mjs"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "skills",
+    "punchlist.config.example.json"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "cli": "node bin/punchlist.mjs",
+    "start": "node bin/punchlist.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:coverage": "vitest run --coverage",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
   }
 }

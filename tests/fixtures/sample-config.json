@@ -1,0 +1,22 @@
+{
+  "projectName": "test-project",
+  "issueTracker": {
+    "type": "github",
+    "repo": "test-owner/test-repo"
+  },
+  "storage": {
+    "type": "sqlite",
+    "path": "./test-punchlist.db"
+  },
+  "auth": {
+    "type": "token"
+  },
+  "widget": {
+    "position": "bottom-right",
+    "theme": "light",
+    "corsDomains": ["http://localhost:3000"]
+  },
+  "aiTool": "claude-code",
+  "testCases": [],
+  "testers": []
+}
