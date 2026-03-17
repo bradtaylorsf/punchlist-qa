@@ -37,7 +37,26 @@ Check-only: `scripts/sync-agent-assets.sh --check`
 5. **Update as you go.** Comment on the issue with status changes, blockers, and approach pivots.
 6. **Log learnings.** After any correction or surprise, comment on the issue so future agents can learn.
 7. **Link commits.** Every commit must reference the issue: `fix: description (#123)` or `closes #123`.
-8. **Close when verified.** Only close the issue when the change is tested and working.
+8. **Close via PR only.** Never close issues manually or via `gh issue close`. Always close by including `closes #N` in the PR body so GitHub auto-links the issue to the PR. This is enforced by CI.
+
+### Closing Issues Checklist
+
+Before creating a PR that closes issues, add a comment to **each** completed issue with:
+
+```markdown
+## Linked PR
+Implemented in [PR #XX](url).
+
+## What was delivered
+- Bullet points of what was built
+
+## Lessons Learned
+- Surprises, corrections, decisions made during implementation
+```
+
+For **epic issues**, also include:
+- Child issue status (which are done, which are deferred)
+- Architectural decisions made during the epic
 
 ### Branch Convention
 
@@ -57,7 +76,7 @@ Types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`
 
 - Always create a PR to `main` — never push directly.
 - PR title follows the same commit convention.
-- PR body must reference the GitHub issue.
+- PR body **must** include `closes #N` for every issue completed by the PR. This is enforced by CI — PRs without issue references will fail the check.
 - Run tests before marking ready for review.
 
 ---
