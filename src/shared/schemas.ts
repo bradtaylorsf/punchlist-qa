@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { findClosestMatch } from './string-utils.js';
 
 // --- Enums ---
 
@@ -83,6 +84,61 @@ export const punchlistConfigSchema = z.object({
   categories: z.array(categorySchema).default([]),
   testCases: z.array(testCaseSchema),
   testers: z.array(testerSchema),
+}).superRefine((data, ctx) => {
+  // Duplicate category IDs
+  const categoryIds = new Set<string>();
+  for (let i = 0; i < data.categories.length; i++) {
+    const id = data.categories[i].id;
+    if (categoryIds.has(id)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['categories', i, 'id'],
+        message: `Duplicate category ID: "${id}"`,
+      });
+    }
+    categoryIds.add(id);
+  }
+
+  // Duplicate test case IDs
+  const testCaseIds = new Set<string>();
+  for (let i = 0; i < data.testCases.length; i++) {
+    const id = data.testCases[i].id;
+    if (testCaseIds.has(id)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['testCases', i, 'id'],
+        message: `Duplicate test case ID: "${id}"`,
+      });
+    }
+    testCaseIds.add(id);
+  }
+
+  // Validate category references and ID prefix matching
+  const validCategoryIds = [...categoryIds];
+  for (let i = 0; i < data.testCases.length; i++) {
+    const tc = data.testCases[i];
+
+    // Category must reference a valid category ID (only if categories are defined)
+    if (validCategoryIds.length > 0 && !categoryIds.has(tc.category)) {
+      const suggestion = findClosestMatch(tc.category, validCategoryIds);
+      const hint = suggestion ? ` Did you mean "${suggestion}"?` : '';
+      ctx.addIssue({
+        code: 'custom',
+        path: ['testCases', i, 'category'],
+        message: `Category "${tc.category}" not found in categories.${hint}`,
+      });
+    }
+
+    // Test ID prefix must match the category field
+    const prefix = tc.id.replace(/-\d{3}$/, '');
+    if (prefix !== tc.category) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['testCases', i, 'id'],
+        message: `Test ID prefix "${prefix}" does not match category "${tc.category}"`,
+      });
+    }
+  }
 });
 
 // --- Inferred types ---
