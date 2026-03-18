@@ -124,6 +124,10 @@ export function useTestingState() {
     setRounds((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
   }, [activeRound]);
 
+  const setResultSynced = useCallback((testId: string, result: TestResult) => {
+    setResults((prev) => new Map(prev).set(testId, result));
+  }, []);
+
   return {
     rounds,
     activeRound,
@@ -134,5 +138,6 @@ export function useTestingState() {
     submitTestResult,
     undoResult,
     completeRound,
+    setResultSynced,
   };
 }
