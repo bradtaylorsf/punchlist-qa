@@ -192,6 +192,12 @@ export const createSupportTicketOptsSchema = z.object({
   customContext: z.record(z.string(), z.string()).optional(),
 });
 
+// --- Auth request schemas ---
+
+export const loginRequestSchema = z.object({
+  token: z.string().min(1, 'Token is required'),
+});
+
 // --- Widget request schema (incoming from browser widget → server) ---
 
 export const supportTicketRequestSchema = z.object({
@@ -336,3 +342,4 @@ export type CreateQAFailureOpts = z.infer<typeof createQAFailureOptsSchema>;
 export type CreateSupportTicketOpts = z.infer<typeof createSupportTicketOptsSchema>;
 export type LabelDef = z.infer<typeof labelDefSchema>;
 export type SupportTicketRequest = z.infer<typeof supportTicketRequestSchema>;
+export type LoginRequest = z.infer<typeof loginRequestSchema>;
