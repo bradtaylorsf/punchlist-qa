@@ -6,6 +6,7 @@ export class InvalidTokenError extends Error {
   constructor(message = 'Invalid or expired token') {
     super(message);
     this.name = 'InvalidTokenError';
+    Error.captureStackTrace?.(this, InvalidTokenError);
   }
 }
 
@@ -18,6 +19,7 @@ export class UnrecognizedTokenError extends Error {
   constructor(message = 'Token not recognized') {
     super(message);
     this.name = 'UnrecognizedTokenError';
+    Error.captureStackTrace?.(this, UnrecognizedTokenError);
   }
 }
 
@@ -29,5 +31,6 @@ export class RevokedUserError extends Error {
   constructor(message = 'User access has been revoked') {
     super(message);
     this.name = 'RevokedUserError';
+    Error.captureStackTrace?.(this, RevokedUserError);
   }
 }

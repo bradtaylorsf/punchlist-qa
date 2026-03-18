@@ -375,8 +375,13 @@ describe('users', () => {
 // --- Sessions ---
 
 describe('sessions', () => {
-  const futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour from now
-  const pastExpiry = new Date(Date.now() - 60 * 60 * 1000).toISOString();   // 1 hour ago
+  let futureExpiry: string;
+  let pastExpiry: string;
+
+  beforeEach(() => {
+    futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour from now
+    pastExpiry = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // 1 hour ago
+  });
 
   describe('createSession', () => {
     it('should create a session and return a Session object', async () => {

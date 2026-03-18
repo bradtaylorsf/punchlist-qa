@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import type { StorageAdapter } from './types.js';
 import { runMigrations } from './migrations.js';
 import { roundSchema, resultSchema, userSchema, sessionSchema } from '../../shared/schemas.js';
@@ -270,16 +270,20 @@ export class SqliteAdapter implements StorageAdapter {
     const db = this.getDb();
     // SQLite default SQLITE_MAX_VARIABLE_NUMBER is 999. Use 900 as a safe batch size
     // to leave room for the roundId parameter and avoid hitting the limit.
+    // Wrap in a transaction so partial failures don't leave inconsistent state.
     const BATCH_SIZE = 900;
     let totalDeleted = 0;
-    for (let i = 0; i < testIds.length; i += BATCH_SIZE) {
-      const batch = testIds.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map(() => '?').join(', ');
-      const result = db
-        .prepare(`DELETE FROM results WHERE round_id = ? AND test_id IN (${placeholders})`)
-        .run(roundId, ...batch);
-      totalDeleted += result.changes;
-    }
+    const deleteBatched = db.transaction(() => {
+      for (let i = 0; i < testIds.length; i += BATCH_SIZE) {
+        const batch = testIds.slice(i, i + BATCH_SIZE);
+        const placeholders = batch.map(() => '?').join(', ');
+        const result = db
+          .prepare(`DELETE FROM results WHERE round_id = ? AND test_id IN (${placeholders})`)
+          .run(roundId, ...batch);
+        totalDeleted += result.changes;
+      }
+    });
+    deleteBatched();
     return totalDeleted;
   }
 
@@ -353,24 +357,34 @@ export class SqliteAdapter implements StorageAdapter {
 
   async createSession(userEmail: string, expiresAt: string): Promise<Session> {
     const db = this.getDb();
-    const id = randomBytes(32).toString('hex');
+    const rawId = randomBytes(32).toString('hex');
+    // Store a SHA-256 hash of the session ID — if the DB file leaks,
+    // an attacker cannot directly impersonate sessions.
+    const id = createHash('sha256').update(rawId).digest('hex');
     const now = new Date().toISOString();
     db.prepare(
       `INSERT INTO sessions (id, user_email, expires_at, created_at)
        VALUES (?, ?, ?, ?)`,
     ).run(id, userEmail, expiresAt, now);
     const row = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow;
-    return rowToSession(row);
+    // Return the raw ID to the caller (for cookie storage); the DB stores the hash.
+    const session = rowToSession(row);
+    return { ...session, id: rawId };
   }
 
   async getSession(id: string): Promise<Session | null> {
-    const row = this.getDb().prepare('SELECT * FROM sessions WHERE id = ?').get(id) as
+    const hashedId = createHash('sha256').update(id).digest('hex');
+    const row = this.getDb().prepare('SELECT * FROM sessions WHERE id = ?').get(hashedId) as
       | SessionRow
       | undefined;
-    return row ? rowToSession(row) : null;
+    if (!row) return null;
+    // Return the raw ID the caller provided, not the hash stored in the DB.
+    const session = rowToSession(row);
+    return { ...session, id };
   }
 
   async getSessionWithUser(id: string): Promise<{ session: Session; user: User } | null> {
+    const hashedId = createHash('sha256').update(id).digest('hex');
     const row = this.getDb()
       .prepare(
         `SELECT
@@ -381,7 +395,7 @@ export class SqliteAdapter implements StorageAdapter {
        JOIN users u ON s.user_email = u.email
        WHERE s.id = ?`,
       )
-      .get(id) as
+      .get(hashedId) as
       | {
           s_id: string;
           s_user_email: string;
@@ -398,13 +412,15 @@ export class SqliteAdapter implements StorageAdapter {
         }
       | undefined;
     if (!row) return null;
+    // Return the raw ID the caller provided, not the hash stored in the DB.
+    const session = rowToSession({
+      id: row.s_id,
+      user_email: row.s_user_email,
+      expires_at: row.s_expires_at,
+      created_at: row.s_created_at,
+    });
     return {
-      session: {
-        id: row.s_id,
-        userEmail: row.s_user_email,
-        expiresAt: row.s_expires_at,
-        createdAt: row.s_created_at,
-      },
+      session: { ...session, id },
       user: rowToUser({
         id: row.u_id,
         email: row.u_email,
@@ -419,7 +435,8 @@ export class SqliteAdapter implements StorageAdapter {
   }
 
   async deleteSession(id: string): Promise<void> {
-    this.getDb().prepare('DELETE FROM sessions WHERE id = ?').run(id);
+    const hashedId = createHash('sha256').update(id).digest('hex');
+    this.getDb().prepare('DELETE FROM sessions WHERE id = ?').run(hashedId);
   }
 
   async deleteExpiredSessions(): Promise<void> {
@@ -433,8 +450,8 @@ export class SqliteAdapter implements StorageAdapter {
    */
   startSessionCleanup(intervalMs: number = 60 * 60 * 1000): () => void {
     const timer = setInterval(() => {
-      this.deleteExpiredSessions().catch(() => {
-        // Swallow errors — cleanup is best-effort
+      this.deleteExpiredSessions().catch((err) => {
+        console.warn('[punchlist] Session cleanup failed:', err);
       });
     }, intervalMs);
     timer.unref();

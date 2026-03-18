@@ -1,4 +1,7 @@
 import type Database from 'better-sqlite3';
+import { z } from 'zod';
+
+const migrationVersionRow = z.object({ version: z.number() });
 
 export interface Migration {
   version: number;
@@ -88,7 +91,7 @@ export function runMigrations(db: Database.Database): void {
     db
       .prepare('SELECT version FROM migrations')
       .all()
-      .map((r) => (r as { version: number }).version),
+      .map((r) => migrationVersionRow.parse(r).version),
   );
 
   const pending = migrations.filter((m) => !applied.has(m.version));

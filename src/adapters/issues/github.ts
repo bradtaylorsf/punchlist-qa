@@ -152,7 +152,8 @@ export class GitHubIssueAdapter implements IssueAdapter {
     const existingNames = new Set<string>();
     let page = 1;
 
-    while (true) {
+    const MAX_PAGES = 100;
+    while (page <= MAX_PAGES) {
       const res = await this.requestWithRetry(
         `/repos/${this.owner}/${this.repo}/labels?per_page=${perPage}&page=${page}`,
         'GET',

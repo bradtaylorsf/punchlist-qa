@@ -64,3 +64,8 @@ export {
   authenticateRequest,
 } from './adapters/auth/middleware.js';
 export type { SessionCookieOptions } from './adapters/auth/middleware.js';
+export {
+  InvalidTokenError,
+  UnrecognizedTokenError,
+  RevokedUserError,
+} from './adapters/auth/errors.js';

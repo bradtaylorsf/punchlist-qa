@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const createIssueResponseSchema = z.object({
-  html_url: z.string(),
+  html_url: z.string().url(),
   id: z.number(),
   number: z.number(),
 });
@@ -9,7 +9,7 @@ export const createIssueResponseSchema = z.object({
 export const searchIssuesResponseSchema = z.object({
   items: z.array(
     z.object({
-      html_url: z.string(),
+      html_url: z.string().url(),
       number: z.number(),
       title: z.string(),
     }),
