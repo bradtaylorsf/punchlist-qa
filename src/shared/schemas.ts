@@ -147,6 +147,39 @@ export const createUserInputSchema = z.object({
   invitedBy: z.string().email(),
 });
 
+// --- Issue adapter schemas ---
+
+export const openIssueSchema = z.object({
+  url: z.string(),
+  number: z.number().int(),
+  title: z.string(),
+});
+
+export const createQAFailureOptsSchema = z.object({
+  testId: z.string().min(1),
+  testTitle: z.string().min(1),
+  category: z.string().min(1),
+  severity: resultSeveritySchema,
+  description: z.string().min(1),
+  testerName: z.string().min(1),
+  testerEmail: z.string().email(),
+  commitHash: z.string().optional(),
+  roundName: z.string().optional(),
+});
+
+export const createSupportTicketOptsSchema = z.object({
+  subject: z.string().min(1),
+  description: z.string().min(1),
+  userName: z.string().optional(),
+  userEmail: z.string().email().optional(),
+  userAgent: z.string().optional(),
+  pageUrl: z.string().optional(),
+  screenSize: z.string().optional(),
+  category: z.string().optional(),
+  consoleErrors: z.string().optional(),
+  customContext: z.record(z.string(), z.string()).optional(),
+});
+
 // --- Session schema ---
 
 export const sessionSchema = z.object({
@@ -253,3 +286,6 @@ export type UpdateRoundInput = z.infer<typeof updateRoundInputSchema>;
 export type SubmitResultInput = z.infer<typeof submitResultInputSchema>;
 export type CreateUserInput = z.infer<typeof createUserInputSchema>;
 export type Session = z.infer<typeof sessionSchema>;
+export type OpenIssue = z.infer<typeof openIssueSchema>;
+export type CreateQAFailureOpts = z.infer<typeof createQAFailureOptsSchema>;
+export type CreateSupportTicketOpts = z.infer<typeof createSupportTicketOptsSchema>;

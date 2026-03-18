@@ -17,6 +17,9 @@ export {
   submitResultInputSchema,
   createUserInputSchema,
   sessionSchema,
+  openIssueSchema,
+  createQAFailureOptsSchema,
+  createSupportTicketOptsSchema,
 } from './shared/schemas.js';
 export { ConfigFetcher, ConfigFetcherError } from './shared/config-fetcher.js';
 export type { ConfigFetcherOpts } from './shared/config-fetcher.js';
@@ -39,6 +42,15 @@ export type {
   SubmitResultInput,
   CreateUserInput,
   Session,
+  OpenIssue,
+  CreateQAFailureOpts,
+  CreateSupportTicketOpts,
 } from './shared/types.js';
 export { SqliteAdapter } from './adapters/storage/index.js';
 export type { StorageAdapter } from './adapters/storage/types.js';
+export { GitHubIssueAdapter } from './adapters/issues/index.js';
+export type {
+  IssueAdapter,
+  CreateIssueOpts,
+  CreatedIssue,
+} from './adapters/issues/index.js';

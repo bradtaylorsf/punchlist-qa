@@ -1,4 +1,11 @@
-import type { IssueAdapter, CreateIssueOpts, CreatedIssue } from './types.js';
+import type {
+  IssueAdapter,
+  CreateIssueOpts,
+  CreatedIssue,
+  OpenIssue,
+  CreateQAFailureOpts,
+  CreateSupportTicketOpts,
+} from './types.js';
 import type { LabelDef } from '../../shared/constants.js';
 
 export class GitHubIssueAdapter implements IssueAdapter {
@@ -45,6 +52,26 @@ export class GitHubIssueAdapter implements IssueAdapter {
 
     const data = await res.json() as { html_url: string; id: number; number: number };
     return { url: data.html_url, id: String(data.id), number: data.number };
+  }
+
+  async initialize(): Promise<void> {
+    throw new Error('Not implemented');
+  }
+
+  async createQAFailureIssue(_opts: CreateQAFailureOpts): Promise<CreatedIssue> {
+    throw new Error('Not implemented');
+  }
+
+  async createSupportTicketIssue(_opts: CreateSupportTicketOpts): Promise<CreatedIssue> {
+    throw new Error('Not implemented');
+  }
+
+  async getOpenIssueForTest(_testId: string): Promise<OpenIssue | null> {
+    throw new Error('Not implemented');
+  }
+
+  async validateLabels(_labels: LabelDef[]): Promise<string[]> {
+    throw new Error('Not implemented');
   }
 
   async addLabels(labels: LabelDef[]): Promise<void> {
