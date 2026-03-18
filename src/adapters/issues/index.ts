@@ -1,4 +1,4 @@
-export { GitHubIssueAdapter } from './github.js';
+export { GitHubIssueAdapter, RateLimitError } from './github.js';
 export type {
   IssueAdapter,
   CreateIssueOpts,

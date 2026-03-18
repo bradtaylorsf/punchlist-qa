@@ -96,6 +96,20 @@ describe('retry utilities', () => {
       vi.useFakeTimers();
     });
 
+    it('should cap delay at maxDelayMs', async () => {
+      const fn = vi.fn()
+        .mockRejectedValueOnce(new Error('transient'))
+        .mockResolvedValue('ok');
+
+      const promise = withRetry(fn, () => true, { maxRetries: 3, baseDelayMs: 100_000, maxDelayMs: 50 });
+      // maxDelayMs is 50ms, so even with large baseDelayMs, delay is capped
+      await vi.advanceTimersByTimeAsync(100);
+      const result = await promise;
+
+      expect(result).toBe('ok');
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
     it('should not retry when shouldRetry returns false', async () => {
       const fn = vi.fn().mockRejectedValue(new Error('fatal'));
 

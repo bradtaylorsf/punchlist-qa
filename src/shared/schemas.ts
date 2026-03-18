@@ -156,7 +156,7 @@ export const openIssueSchema = z.object({
 });
 
 export const createQAFailureOptsSchema = z.object({
-  testId: z.string().min(1),
+  testId: z.string().regex(/^[a-z][a-z0-9-]*-\d{3}$/, 'testId must match pattern: prefix-NNN (e.g. auth-001)'),
   testTitle: z.string().min(1),
   category: z.string().min(1),
   severity: resultSeveritySchema,

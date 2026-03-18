@@ -6,9 +6,11 @@ interface CacheEntry<T> {
 export class TTLCache<T> {
   private cache = new Map<string, CacheEntry<T>>();
   private ttlMs: number;
+  private maxSize: number;
 
-  constructor(ttlMs = 5 * 60 * 1000) {
+  constructor(ttlMs = 5 * 60 * 1000, maxSize = 1000) {
     this.ttlMs = ttlMs;
+    this.maxSize = maxSize;
   }
 
   get(key: string): T | undefined {
@@ -22,6 +24,11 @@ export class TTLCache<T> {
   }
 
   set(key: string, value: T): void {
+    // Evict oldest entry if at capacity (Map iteration order is insertion order)
+    if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest !== undefined) this.cache.delete(oldest);
+    }
     this.cache.set(key, { value, expiresAt: Date.now() + this.ttlMs });
   }
 
@@ -31,5 +38,9 @@ export class TTLCache<T> {
 
   clear(): void {
     this.cache.clear();
+  }
+
+  get size(): number {
+    return this.cache.size;
   }
 }

@@ -17,7 +17,7 @@ import {
 import { withRetry, isRateLimitError, getRetryAfterMs } from './retry.js';
 import { TTLCache } from './cache.js';
 
-class RateLimitError extends Error {
+export class RateLimitError extends Error {
   retryAfterMs: number;
   constructor(retryAfterMs: number) {
     super(`Rate limited. Retry after ${retryAfterMs}ms`);
@@ -77,7 +77,7 @@ export class GitHubIssueAdapter implements IssueAdapter {
   }
 
   async initialize(): Promise<void> {
-    const res = await this.request(`/repos/${this.owner}/${this.repo}`, 'GET');
+    const res = await this.requestWithRetry(`/repos/${this.owner}/${this.repo}`, 'GET');
     if (!res.ok) {
       throw new Error(`Failed to reach GitHub repo: ${res.status}`);
     }
@@ -126,6 +126,7 @@ export class GitHubIssueAdapter implements IssueAdapter {
       `/search/issues?q=${encodeURIComponent(query)}&per_page=1`,
       'GET'
     );
+    // Don't cache API errors — only cache successful lookups
     if (!res.ok) return null;
     const data = await res.json() as { items: Array<{ html_url: string; number: number; title: string }> };
     const result = data.items.length === 0

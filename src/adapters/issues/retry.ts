@@ -1,6 +1,7 @@
 export interface RetryOptions {
   maxRetries?: number;
   baseDelayMs?: number;
+  maxDelayMs?: number;
 }
 
 export function isRateLimitError(res: Response): boolean {
@@ -30,6 +31,7 @@ export async function withRetry<T>(
 ): Promise<T> {
   const maxRetries = options?.maxRetries ?? 3;
   const baseDelayMs = options?.baseDelayMs ?? 1000;
+  const maxDelayMs = options?.maxDelayMs ?? 30_000;
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -41,7 +43,7 @@ export async function withRetry<T>(
         throw error;
       }
       const jitter = Math.random() * 0.5 + 0.75; // 0.75 - 1.25
-      const delay = baseDelayMs * Math.pow(2, attempt) * jitter;
+      const delay = Math.min(baseDelayMs * Math.pow(2, attempt) * jitter, maxDelayMs);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }

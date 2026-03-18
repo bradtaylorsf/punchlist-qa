@@ -1,7 +1,11 @@
 import type { CreateQAFailureOpts, CreateSupportTicketOpts } from './types.js';
 
+export function sanitizeForHtmlComment(value: string): string {
+  return value.replace(/-->/g, '');
+}
+
 export function buildTestIdMarker(testId: string): string {
-  return `<!-- punchlist:testId=${testId} -->`;
+  return `<!-- punchlist:testId=${sanitizeForHtmlComment(testId)} -->`;
 }
 
 export function formatQAFailureTitle(testId: string, testTitle: string): string {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  sanitizeForHtmlComment,
   buildTestIdMarker,
   formatQAFailureTitle,
   formatQAFailureBody,
@@ -9,6 +10,20 @@ import {
 import type { CreateQAFailureOpts, CreateSupportTicketOpts } from '../../src/adapters/issues/types.js';
 
 describe('issue formatting', () => {
+  describe('sanitizeForHtmlComment', () => {
+    it('should strip --> sequences', () => {
+      expect(sanitizeForHtmlComment('test-->id')).toBe('testid');
+    });
+
+    it('should leave safe strings unchanged', () => {
+      expect(sanitizeForHtmlComment('auth-001')).toBe('auth-001');
+    });
+
+    it('should handle multiple --> sequences', () => {
+      expect(sanitizeForHtmlComment('a-->b-->c')).toBe('abc');
+    });
+  });
+
   describe('buildTestIdMarker', () => {
     it('should produce correct HTML comment', () => {
       expect(buildTestIdMarker('auth-001')).toBe('<!-- punchlist:testId=auth-001 -->');
