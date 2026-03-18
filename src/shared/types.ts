@@ -28,4 +28,7 @@ export type {
   SubmitResultInput,
   CreateUserInput,
   Session,
+  OpenIssue,
+  CreateQAFailureOpts,
+  CreateSupportTicketOpts,
 } from './schemas.js';
