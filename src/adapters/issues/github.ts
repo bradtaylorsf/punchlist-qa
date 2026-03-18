@@ -15,6 +15,7 @@ import {
   formatSupportTicketBody,
 } from './format.js';
 import { withRetry, isRateLimitError, getRetryAfterMs } from './retry.js';
+import { TTLCache } from './cache.js';
 
 class RateLimitError extends Error {
   retryAfterMs: number;
@@ -29,6 +30,7 @@ export class GitHubIssueAdapter implements IssueAdapter {
   private owner: string;
   private repo: string;
   private token: string;
+  private issueCache = new TTLCache<OpenIssue | null>(5 * 60 * 1000);
 
   constructor(repoSlug: string, token: string) {
     const [owner, repo] = repoSlug.split('/');
@@ -102,7 +104,9 @@ export class GitHubIssueAdapter implements IssueAdapter {
     const title = formatQAFailureTitle(opts.testId, opts.testTitle);
     const body = formatQAFailureBody(opts);
     const labels = ['punchlist', 'qa:fail', opts.severity];
-    return this.createIssue({ title, body, labels });
+    const result = await this.createIssue({ title, body, labels });
+    this.issueCache.invalidate(opts.testId);
+    return result;
   }
 
   async createSupportTicketIssue(opts: CreateSupportTicketOpts): Promise<CreatedIssue> {
@@ -114,6 +118,9 @@ export class GitHubIssueAdapter implements IssueAdapter {
   }
 
   async getOpenIssueForTest(testId: string): Promise<OpenIssue | null> {
+    const cached = this.issueCache.get(testId);
+    if (cached !== undefined) return cached;
+
     const query = `repo:${this.owner}/${this.repo} is:issue is:open "punchlist:testId=${testId}" in:body`;
     const res = await this.requestWithRetry(
       `/search/issues?q=${encodeURIComponent(query)}&per_page=1`,
@@ -121,8 +128,11 @@ export class GitHubIssueAdapter implements IssueAdapter {
     );
     if (!res.ok) return null;
     const data = await res.json() as { items: Array<{ html_url: string; number: number; title: string }> };
-    if (data.items.length === 0) return null;
-    return { url: data.items[0].html_url, number: data.items[0].number, title: data.items[0].title };
+    const result = data.items.length === 0
+      ? null
+      : { url: data.items[0].html_url, number: data.items[0].number, title: data.items[0].title };
+    this.issueCache.set(testId, result);
+    return result;
   }
 
   async validateLabels(labels: LabelDef[]): Promise<string[]> {

@@ -257,6 +257,79 @@ describe('GitHubIssueAdapter', () => {
 
         expect(result).toBeNull();
       });
+
+      it('should use cache on second call (fetch called only once)', async () => {
+        fetchMock.mockResolvedValueOnce(
+          mockResponse(200, {
+            items: [{
+              html_url: 'https://github.com/o/r/issues/5',
+              number: 5,
+              title: '[QA Failure] Login (auth-001)',
+            }],
+          })
+        );
+
+        const adapter = new GitHubIssueAdapter('owner/repo', 'token');
+        const first = await adapter.getOpenIssueForTest('auth-001');
+        const second = await adapter.getOpenIssueForTest('auth-001');
+
+        expect(first).toEqual(second);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+
+      it('should cache null results too', async () => {
+        fetchMock.mockResolvedValueOnce(mockResponse(200, { items: [] }));
+
+        const adapter = new GitHubIssueAdapter('owner/repo', 'token');
+        const first = await adapter.getOpenIssueForTest('missing-001');
+        const second = await adapter.getOpenIssueForTest('missing-001');
+
+        expect(first).toBeNull();
+        expect(second).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('cache invalidation', () => {
+      it('createQAFailureIssue should invalidate cache for that testId', async () => {
+        // First: cache a search result
+        fetchMock.mockResolvedValueOnce(mockResponse(200, { items: [] }));
+
+        const adapter = new GitHubIssueAdapter('owner/repo', 'token');
+        await adapter.getOpenIssueForTest('billing-001');
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        // Create QA failure issue — this should invalidate the cache
+        fetchMock.mockResolvedValueOnce(
+          mockResponse(201, { html_url: 'https://github.com/o/r/issues/10', id: 10, number: 10 })
+        );
+        await adapter.createQAFailureIssue({
+          testId: 'billing-001',
+          testTitle: 'Subscribe',
+          category: 'Billing',
+          severity: 'broken',
+          description: 'Fails.',
+          testerName: 'Brad',
+          testerEmail: 'brad@example.com',
+        });
+
+        // Now search again — should hit API, not cache
+        fetchMock.mockResolvedValueOnce(
+          mockResponse(200, {
+            items: [{
+              html_url: 'https://github.com/o/r/issues/10',
+              number: 10,
+              title: '[QA Failure] Subscribe (billing-001)',
+            }],
+          })
+        );
+        const result = await adapter.getOpenIssueForTest('billing-001');
+
+        expect(result).not.toBeNull();
+        expect(result!.number).toBe(10);
+        // 1 (first search) + 1 (create issue) + 1 (second search) = 3
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+      });
     });
 
     describe('auth error handling', () => {
