@@ -192,6 +192,29 @@ export const createSupportTicketOptsSchema = z.object({
   customContext: z.record(z.string(), z.string()).optional(),
 });
 
+// --- Widget request schema (incoming from browser widget → server) ---
+
+export const supportTicketRequestSchema = z.object({
+  subject: z.string().min(1).max(200),
+  category: z.string().min(1),
+  description: z.string().max(5000).optional().default(''),
+  userName: z.string().max(100).optional(),
+  userEmail: z.string().email().optional(),
+  context: z
+    .object({
+      userAgent: z.string().optional(),
+      pageUrl: z.string().optional(),
+      screenSize: z.string().optional(),
+      viewportSize: z.string().optional(),
+      consoleErrors: z.array(z.string()).max(10).optional(),
+      lastError: z.string().optional(),
+      timestamp: z.string().optional(),
+      timezone: z.string().optional(),
+      customContext: z.record(z.string(), z.string()).optional(),
+    })
+    .optional(),
+});
+
 // --- Label schema ---
 
 export const labelDefSchema = z.object({
@@ -312,3 +335,4 @@ export type OpenIssue = z.infer<typeof openIssueSchema>;
 export type CreateQAFailureOpts = z.infer<typeof createQAFailureOptsSchema>;
 export type CreateSupportTicketOpts = z.infer<typeof createSupportTicketOptsSchema>;
 export type LabelDef = z.infer<typeof labelDefSchema>;
+export type SupportTicketRequest = z.infer<typeof supportTicketRequestSchema>;

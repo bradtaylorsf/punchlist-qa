@@ -32,4 +32,5 @@ export type {
   CreateQAFailureOpts,
   CreateSupportTicketOpts,
   LabelDef,
+  SupportTicketRequest,
 } from './schemas.js';

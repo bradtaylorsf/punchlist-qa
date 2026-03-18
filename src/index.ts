@@ -21,6 +21,7 @@ export {
   createQAFailureOptsSchema,
   createSupportTicketOptsSchema,
   labelDefSchema,
+  supportTicketRequestSchema,
 } from './shared/schemas.js';
 export { ConfigFetcher, ConfigFetcherError } from './shared/config-fetcher.js';
 export type { ConfigFetcherOpts } from './shared/config-fetcher.js';
@@ -47,6 +48,7 @@ export type {
   CreateQAFailureOpts,
   CreateSupportTicketOpts,
   LabelDef,
+  SupportTicketRequest,
 } from './shared/types.js';
 export { SqliteAdapter } from './adapters/storage/index.js';
 export type { StorageAdapter } from './adapters/storage/types.js';
@@ -69,3 +71,5 @@ export {
   UnrecognizedTokenError,
   RevokedUserError,
 } from './adapters/auth/errors.js';
+export { createApp } from './server/app.js';
+export type { AppDependencies } from './server/app.js';
