@@ -85,9 +85,21 @@ describe('rounds', () => {
     expect(completed.completedAt).toBe('2026-01-15T00:00:00.000Z');
   });
 
+  it('returns unchanged round when updating with empty object', async () => {
+    const round = await adapter.createRound({ name: 'R1', createdByEmail: 'a@b.com', createdByName: 'A' });
+    const updated = await adapter.updateRound(round.id, {});
+    expect(updated).toEqual(round);
+  });
+
   it('throws when updating non-existent round', async () => {
     await expect(
       adapter.updateRound('00000000-0000-0000-0000-000000000000', { name: 'X' }),
+    ).rejects.toThrow('Round not found');
+  });
+
+  it('throws when updating non-existent round with empty object', async () => {
+    await expect(
+      adapter.updateRound('00000000-0000-0000-0000-000000000000', {}),
     ).rejects.toThrow('Round not found');
   });
 });
@@ -145,6 +157,29 @@ describe('results', () => {
     expect(results).toHaveLength(1);
   });
 
+  it('preserves issue link when re-submitting result', async () => {
+    const result = await adapter.submitResult(roundId, {
+      testId: 'auth-001',
+      status: 'fail',
+      testerName: 'Bob',
+      testerEmail: 'bob@b.com',
+    });
+
+    await adapter.updateResultIssue(result.id, 'https://github.com/org/repo/issues/5', 5);
+
+    const resubmitted = await adapter.submitResult(roundId, {
+      testId: 'auth-001',
+      status: 'pass',
+      testerName: 'Bob',
+      testerEmail: 'bob@b.com',
+    });
+
+    expect(resubmitted.id).toBe(result.id);
+    expect(resubmitted.status).toBe('pass');
+    expect(resubmitted.issueUrl).toBe('https://github.com/org/repo/issues/5');
+    expect(resubmitted.issueNumber).toBe(5);
+  });
+
   it('deletes a result by ID', async () => {
     const result = await adapter.submitResult(roundId, {
       testId: 'auth-001',
@@ -168,6 +203,15 @@ describe('results', () => {
     const results = await adapter.listResults(roundId);
     expect(results).toHaveLength(1);
     expect(results[0].testId).toBe('auth-002');
+  });
+
+  it('handles deleteResultsByTestIds with empty array', async () => {
+    await adapter.submitResult(roundId, { testId: 'auth-001', status: 'pass', testerName: 'B', testerEmail: 'b@b.com' });
+
+    await adapter.deleteResultsByTestIds(roundId, []);
+
+    const results = await adapter.listResults(roundId);
+    expect(results).toHaveLength(1);
   });
 
   it('updates result issue link', async () => {
@@ -244,6 +288,10 @@ describe('users', () => {
 
     const user = await adapter.getUserByEmail('alice@a.com');
     expect(user?.revoked).toBe(true);
+  });
+
+  it('throws when revoking non-existent user', async () => {
+    await expect(adapter.revokeUser('nobody@a.com')).rejects.toThrow('User not found');
   });
 
   it('enforces unique email constraint', async () => {

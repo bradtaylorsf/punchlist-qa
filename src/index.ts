@@ -38,4 +38,5 @@ export type {
   SubmitResultInput,
   CreateUserInput,
 } from './shared/types.js';
+export { SqliteAdapter } from './adapters/storage/index.js';
 export type { StorageAdapter } from './adapters/storage/types.js';

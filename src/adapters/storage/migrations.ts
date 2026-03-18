@@ -57,7 +57,6 @@ export const migrations: Migration[] = [
 
       CREATE INDEX idx_results_round_id ON results(round_id);
       CREATE INDEX idx_users_token_hash ON users(token_hash);
-      CREATE INDEX idx_users_email ON users(email);
     `,
   },
 ];

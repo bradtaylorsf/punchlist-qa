@@ -158,10 +158,10 @@ export class SqliteAdapter implements StorageAdapter {
     if (sets.length > 0) {
       values.push(id);
       const result = db.prepare(`UPDATE rounds SET ${sets.join(', ')} WHERE id = ?`).run(...values);
-      if (result.changes === 0) throw new Error(`Round not found: ${id}`);
+      if (result.changes === 0) throw new Error('Round not found');
     } else {
       const existing = await this.getRound(id);
-      if (!existing) throw new Error(`Round not found: ${id}`);
+      if (!existing) throw new Error('Round not found');
     }
 
     return (await this.getRound(id))!;
@@ -173,22 +173,26 @@ export class SqliteAdapter implements StorageAdapter {
     const db = this.getDb();
     const now = new Date().toISOString();
 
-    // Check for existing result to preserve ID on replace
+    // Check for existing result to preserve ID, created_at, and issue link on replace
     const existing = db.prepare(
-      'SELECT id, created_at FROM results WHERE round_id = ? AND test_id = ?',
-    ).get(roundId, input.testId) as { id: string; created_at: string } | undefined;
+      'SELECT id, created_at, issue_url, issue_number FROM results WHERE round_id = ? AND test_id = ?',
+    ).get(roundId, input.testId) as {
+      id: string; created_at: string; issue_url: string | null; issue_number: number | null;
+    } | undefined;
 
     const id = existing?.id ?? randomUUID();
     const createdAt = existing?.created_at ?? now;
 
     db.prepare(
       `INSERT OR REPLACE INTO results (id, round_id, test_id, status, tester_name, tester_email, description, severity, commit_hash, issue_url, issue_number, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id, roundId, input.testId, input.status,
       input.testerName, input.testerEmail,
       input.description ?? null, input.severity ?? null,
-      input.commitHash ?? null, createdAt, now,
+      input.commitHash ?? null,
+      existing?.issue_url ?? null, existing?.issue_number ?? null,
+      createdAt, now,
     );
 
     const row = db.prepare('SELECT * FROM results WHERE id = ?').get(id) as ResultRow;
@@ -218,7 +222,7 @@ export class SqliteAdapter implements StorageAdapter {
     const result = db.prepare(
       'UPDATE results SET issue_url = ?, issue_number = ?, updated_at = ? WHERE id = ?',
     ).run(issueUrl, issueNumber, now, id);
-    if (result.changes === 0) throw new Error(`Result not found: ${id}`);
+    if (result.changes === 0) throw new Error('Result not found');
     const row = db.prepare('SELECT * FROM results WHERE id = ?').get(id) as ResultRow;
     return rowToResult(row);
   }
@@ -253,7 +257,8 @@ export class SqliteAdapter implements StorageAdapter {
   }
 
   async revokeUser(email: string): Promise<void> {
-    this.getDb().prepare('UPDATE users SET revoked = 1 WHERE email = ?').run(email);
+    const result = this.getDb().prepare('UPDATE users SET revoked = 1 WHERE email = ?').run(email);
+    if (result.changes === 0) throw new Error('User not found');
   }
 
   // --- Config ---
