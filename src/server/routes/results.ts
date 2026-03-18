@@ -2,6 +2,11 @@ import { Router } from 'express';
 import type { StorageAdapter } from '../../adapters/storage/types.js';
 import { submitResultInputSchema } from '../../shared/schemas.js';
 
+const submitResultBodySchema = submitResultInputSchema.omit({
+  testerName: true,
+  testerEmail: true,
+});
+
 export function resultsRouter(storageAdapter: StorageAdapter): Router {
   const router = Router();
 
@@ -16,7 +21,7 @@ export function resultsRouter(storageAdapter: StorageAdapter): Router {
 
   router.post('/:roundId/results', async (req, res, next) => {
     try {
-      const body = submitResultInputSchema.parse(req.body);
+      const body = submitResultBodySchema.parse(req.body);
       const input = {
         ...body,
         testerName: req.user!.name,

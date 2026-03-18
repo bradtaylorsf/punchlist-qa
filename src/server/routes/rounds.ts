@@ -2,6 +2,8 @@ import { Router } from 'express';
 import type { StorageAdapter } from '../../adapters/storage/types.js';
 import { createRoundInputSchema, updateRoundInputSchema } from '../../shared/schemas.js';
 
+const createRoundBodySchema = createRoundInputSchema.pick({ name: true, description: true });
+
 export function roundsRouter(storageAdapter: StorageAdapter): Router {
   const router = Router();
 
@@ -16,7 +18,7 @@ export function roundsRouter(storageAdapter: StorageAdapter): Router {
 
   router.post('/', async (req, res, next) => {
     try {
-      const body = createRoundInputSchema.parse(req.body);
+      const body = createRoundBodySchema.parse(req.body);
       const input = {
         ...body,
         createdByEmail: req.user!.email,
