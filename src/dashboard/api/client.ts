@@ -1,5 +1,23 @@
 const BASE = '/api';
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export function isRetriableError(error: unknown): boolean {
+  // Network failures (TypeError from fetch) are retriable
+  if (error instanceof TypeError) return true;
+  // 5xx server errors are retriable
+  if (error instanceof ApiError && error.status >= 500) return true;
+  return false;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     credentials: 'include',
@@ -8,16 +26,24 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (res.status === 401) {
-    throw new Error('UNAUTHENTICATED');
+    throw new ApiError('UNAUTHENTICATED', 401);
   }
 
-  const json = await res.json();
+  let json: Record<string, unknown>;
+  try {
+    json = await res.json();
+  } catch {
+    throw new ApiError(`Request failed: ${res.status} (non-JSON response)`, res.status);
+  }
 
   if (!res.ok) {
-    throw new Error(json.error || `Request failed: ${res.status}`);
+    throw new ApiError(
+      (json.error as string) || `Request failed: ${res.status}`,
+      res.status,
+    );
   }
 
-  return json;
+  return json as T;
 }
 
 // Auth
