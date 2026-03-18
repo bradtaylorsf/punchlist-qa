@@ -71,7 +71,11 @@ describe('rounds', () => {
   });
 
   it('updates a round with partial fields', async () => {
-    const round = await adapter.createRound({ name: 'R1', createdByEmail: 'a@b.com', createdByName: 'A' });
+    const round = await adapter.createRound({
+      name: 'R1',
+      createdByEmail: 'a@b.com',
+      createdByName: 'A',
+    });
 
     const updated = await adapter.updateRound(round.id, { name: 'Renamed' });
     expect(updated.name).toBe('Renamed');
@@ -86,7 +90,11 @@ describe('rounds', () => {
   });
 
   it('returns unchanged round when updating with empty object', async () => {
-    const round = await adapter.createRound({ name: 'R1', createdByEmail: 'a@b.com', createdByName: 'A' });
+    const round = await adapter.createRound({
+      name: 'R1',
+      createdByEmail: 'a@b.com',
+      createdByName: 'A',
+    });
     const updated = await adapter.updateRound(round.id, {});
     expect(updated).toEqual(round);
   });
@@ -98,9 +106,9 @@ describe('rounds', () => {
   });
 
   it('throws when updating non-existent round with empty object', async () => {
-    await expect(
-      adapter.updateRound('00000000-0000-0000-0000-000000000000', {}),
-    ).rejects.toThrow('Round not found');
+    await expect(adapter.updateRound('00000000-0000-0000-0000-000000000000', {})).rejects.toThrow(
+      'Round not found',
+    );
   });
 });
 
@@ -110,7 +118,11 @@ describe('results', () => {
   let roundId: string;
 
   beforeEach(async () => {
-    const round = await adapter.createRound({ name: 'R1', createdByEmail: 'a@b.com', createdByName: 'A' });
+    const round = await adapter.createRound({
+      name: 'R1',
+      createdByEmail: 'a@b.com',
+      createdByName: 'A',
+    });
     roundId = round.id;
   });
 
@@ -193,22 +205,44 @@ describe('results', () => {
     expect(results).toHaveLength(0);
   });
 
-  it('deletes results by test IDs', async () => {
-    await adapter.submitResult(roundId, { testId: 'auth-001', status: 'pass', testerName: 'B', testerEmail: 'b@b.com' });
-    await adapter.submitResult(roundId, { testId: 'auth-002', status: 'pass', testerName: 'B', testerEmail: 'b@b.com' });
-    await adapter.submitResult(roundId, { testId: 'auth-003', status: 'pass', testerName: 'B', testerEmail: 'b@b.com' });
+  it('deletes results by test IDs and returns count', async () => {
+    await adapter.submitResult(roundId, {
+      testId: 'auth-001',
+      status: 'pass',
+      testerName: 'B',
+      testerEmail: 'b@b.com',
+    });
+    await adapter.submitResult(roundId, {
+      testId: 'auth-002',
+      status: 'pass',
+      testerName: 'B',
+      testerEmail: 'b@b.com',
+    });
+    await adapter.submitResult(roundId, {
+      testId: 'auth-003',
+      status: 'pass',
+      testerName: 'B',
+      testerEmail: 'b@b.com',
+    });
 
-    await adapter.deleteResultsByTestIds(roundId, ['auth-001', 'auth-003']);
+    const deleted = await adapter.deleteResultsByTestIds(roundId, ['auth-001', 'auth-003']);
+    expect(deleted).toBe(2);
 
     const results = await adapter.listResults(roundId);
     expect(results).toHaveLength(1);
     expect(results[0].testId).toBe('auth-002');
   });
 
-  it('handles deleteResultsByTestIds with empty array', async () => {
-    await adapter.submitResult(roundId, { testId: 'auth-001', status: 'pass', testerName: 'B', testerEmail: 'b@b.com' });
+  it('handles deleteResultsByTestIds with empty array and returns 0', async () => {
+    await adapter.submitResult(roundId, {
+      testId: 'auth-001',
+      status: 'pass',
+      testerName: 'B',
+      testerEmail: 'b@b.com',
+    });
 
-    await adapter.deleteResultsByTestIds(roundId, []);
+    const deleted = await adapter.deleteResultsByTestIds(roundId, []);
+    expect(deleted).toBe(0);
 
     const results = await adapter.listResults(roundId);
     expect(results).toHaveLength(1);
@@ -222,7 +256,11 @@ describe('results', () => {
       testerEmail: 'bob@b.com',
     });
 
-    const updated = await adapter.updateResultIssue(result.id, 'https://github.com/org/repo/issues/42', 42);
+    const updated = await adapter.updateResultIssue(
+      result.id,
+      'https://github.com/org/repo/issues/42',
+      42,
+    );
     expect(updated.issueUrl).toBe('https://github.com/org/repo/issues/42');
     expect(updated.issueNumber).toBe(42);
   });
@@ -262,7 +300,13 @@ describe('users', () => {
   });
 
   it('finds user by email', async () => {
-    await adapter.createUser({ email: 'alice@a.com', name: 'Alice', tokenHash: 'h1', role: 'tester', invitedBy: 'admin@a.com' });
+    await adapter.createUser({
+      email: 'alice@a.com',
+      name: 'Alice',
+      tokenHash: 'h1',
+      role: 'tester',
+      invitedBy: 'admin@a.com',
+    });
 
     const found = await adapter.getUserByEmail('alice@a.com');
     expect(found?.email).toBe('alice@a.com');
@@ -272,7 +316,13 @@ describe('users', () => {
   });
 
   it('finds user by token hash', async () => {
-    await adapter.createUser({ email: 'alice@a.com', name: 'Alice', tokenHash: 'secret-hash', role: 'tester', invitedBy: 'admin@a.com' });
+    await adapter.createUser({
+      email: 'alice@a.com',
+      name: 'Alice',
+      tokenHash: 'secret-hash',
+      role: 'tester',
+      invitedBy: 'admin@a.com',
+    });
 
     const found = await adapter.getUserByTokenHash('secret-hash');
     expect(found?.email).toBe('alice@a.com');
@@ -282,7 +332,13 @@ describe('users', () => {
   });
 
   it('revokes a user', async () => {
-    await adapter.createUser({ email: 'alice@a.com', name: 'Alice', tokenHash: 'h1', role: 'tester', invitedBy: 'admin@a.com' });
+    await adapter.createUser({
+      email: 'alice@a.com',
+      name: 'Alice',
+      tokenHash: 'h1',
+      role: 'tester',
+      invitedBy: 'admin@a.com',
+    });
 
     await adapter.revokeUser('alice@a.com');
 
@@ -290,16 +346,241 @@ describe('users', () => {
     expect(user?.revoked).toBe(true);
   });
 
-  it('throws when revoking non-existent user', async () => {
-    await expect(adapter.revokeUser('nobody@a.com')).rejects.toThrow('User not found');
+  it('is a no-op when revoking a non-existent user', async () => {
+    // All deletes/revokes are idempotent — missing records are silently ignored.
+    await expect(adapter.revokeUser('nobody@a.com')).resolves.toBeUndefined();
   });
 
   it('enforces unique email constraint', async () => {
-    await adapter.createUser({ email: 'alice@a.com', name: 'Alice', tokenHash: 'h1', role: 'tester', invitedBy: 'admin@a.com' });
+    await adapter.createUser({
+      email: 'alice@a.com',
+      name: 'Alice',
+      tokenHash: 'h1',
+      role: 'tester',
+      invitedBy: 'admin@a.com',
+    });
 
     await expect(
-      adapter.createUser({ email: 'alice@a.com', name: 'Alice2', tokenHash: 'h2', role: 'tester', invitedBy: 'admin@a.com' }),
+      adapter.createUser({
+        email: 'alice@a.com',
+        name: 'Alice2',
+        tokenHash: 'h2',
+        role: 'tester',
+        invitedBy: 'admin@a.com',
+      }),
     ).rejects.toThrow();
+  });
+});
+
+// --- Sessions ---
+
+describe('sessions', () => {
+  let futureExpiry: string;
+  let pastExpiry: string;
+
+  beforeEach(() => {
+    futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour from now
+    pastExpiry = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // 1 hour ago
+  });
+
+  describe('createSession', () => {
+    it('should create a session and return a Session object', async () => {
+      const user = await adapter.createUser({
+        email: 'alice@example.com',
+        name: 'Alice',
+        tokenHash: 'hash123',
+        role: 'tester',
+        invitedBy: 'admin@example.com',
+      });
+
+      const session = await adapter.createSession(user.email, futureExpiry);
+
+      expect(session.userEmail).toBe('alice@example.com');
+      expect(session.expiresAt).toBe(futureExpiry);
+      expect(session.id).toMatch(/^[0-9a-f]{64}$/); // 32 random bytes as hex
+      expect(session.createdAt).toBeDefined();
+    });
+
+    it('should generate a unique session ID for each call', async () => {
+      const user = await adapter.createUser({
+        email: 'bob@example.com',
+        name: 'Bob',
+        tokenHash: 'hash456',
+        role: 'tester',
+        invitedBy: 'admin@example.com',
+      });
+
+      const session1 = await adapter.createSession(user.email, futureExpiry);
+      const session2 = await adapter.createSession(user.email, futureExpiry);
+
+      expect(session1.id).not.toBe(session2.id);
+    });
+
+    it('should throw when creating a session for a non-existent user (FK constraint)', async () => {
+      await expect(
+        adapter.createSession('nonexistent@example.com', futureExpiry),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('getSession', () => {
+    it('should retrieve an existing session by ID', async () => {
+      const user = await adapter.createUser({
+        email: 'alice@example.com',
+        name: 'Alice',
+        tokenHash: 'hash123',
+        role: 'tester',
+        invitedBy: 'admin@example.com',
+      });
+
+      const created = await adapter.createSession(user.email, futureExpiry);
+      const fetched = await adapter.getSession(created.id);
+
+      expect(fetched).not.toBeNull();
+      expect(fetched!.id).toBe(created.id);
+      expect(fetched!.userEmail).toBe('alice@example.com');
+      expect(fetched!.expiresAt).toBe(futureExpiry);
+    });
+
+    it('should return null for a non-existent session ID', async () => {
+      const result = await adapter.getSession('nonexistentsessionid');
+      expect(result).toBeNull();
+    });
+
+    it('should return an expired session (expiry is not checked by getSession)', async () => {
+      const user = await adapter.createUser({
+        email: 'alice@example.com',
+        name: 'Alice',
+        tokenHash: 'hash123',
+        role: 'tester',
+        invitedBy: 'admin@example.com',
+      });
+
+      const session = await adapter.createSession(user.email, pastExpiry);
+      const fetched = await adapter.getSession(session.id);
+
+      // getSession does not filter by expiry — callers must check expiresAt
+      expect(fetched).not.toBeNull();
+      expect(fetched!.id).toBe(session.id);
+      expect(fetched!.expiresAt).toBe(pastExpiry);
+    });
+  });
+
+  describe('getSessionWithUser', () => {
+    it('should return session and full user data via JOIN', async () => {
+      const user = await adapter.createUser({
+        email: 'alice@example.com',
+        name: 'Alice',
+        tokenHash: 'hash123',
+        role: 'tester',
+        invitedBy: 'admin@example.com',
+      });
+
+      const created = await adapter.createSession(user.email, futureExpiry);
+      const result = await adapter.getSessionWithUser(created.id);
+
+      expect(result).not.toBeNull();
+      expect(result!.session.id).toBe(created.id);
+      expect(result!.session.userEmail).toBe('alice@example.com');
+      expect(result!.session.expiresAt).toBe(futureExpiry);
+
+      expect(result!.user.id).toBe(user.id);
+      expect(result!.user.email).toBe('alice@example.com');
+      expect(result!.user.name).toBe('Alice');
+      expect(result!.user.tokenHash).toBe('hash123');
+      expect(result!.user.role).toBe('tester');
+      expect(result!.user.invitedBy).toBe('admin@example.com');
+      expect(result!.user.revoked).toBe(false);
+      expect(result!.user.createdAt).toBeDefined();
+    });
+
+    it('should return null for a non-existent session ID', async () => {
+      const result = await adapter.getSessionWithUser('nonexistentsessionid');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('deleteSession', () => {
+    it('should delete an existing session', async () => {
+      const user = await adapter.createUser({
+        email: 'alice@example.com',
+        name: 'Alice',
+        tokenHash: 'hash123',
+        role: 'tester',
+        invitedBy: 'admin@example.com',
+      });
+
+      const session = await adapter.createSession(user.email, futureExpiry);
+      await adapter.deleteSession(session.id);
+
+      const fetched = await adapter.getSession(session.id);
+      expect(fetched).toBeNull();
+    });
+
+    it('should be idempotent when deleting a non-existent session', async () => {
+      await expect(adapter.deleteSession('nonexistentsessionid')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('deleteExpiredSessions', () => {
+    it('should delete only expired sessions and leave valid ones intact', async () => {
+      const user = await adapter.createUser({
+        email: 'alice@example.com',
+        name: 'Alice',
+        tokenHash: 'hash123',
+        role: 'tester',
+        invitedBy: 'admin@example.com',
+      });
+
+      const validSession = await adapter.createSession(user.email, futureExpiry);
+      const expiredSession = await adapter.createSession(user.email, pastExpiry);
+
+      await adapter.deleteExpiredSessions();
+
+      const validFetched = await adapter.getSession(validSession.id);
+      expect(validFetched).not.toBeNull();
+      expect(validFetched!.id).toBe(validSession.id);
+
+      const expiredFetched = await adapter.getSession(expiredSession.id);
+      expect(expiredFetched).toBeNull();
+    });
+
+    it('should be a no-op when there are no expired sessions', async () => {
+      const user = await adapter.createUser({
+        email: 'alice@example.com',
+        name: 'Alice',
+        tokenHash: 'hash123',
+        role: 'tester',
+        invitedBy: 'admin@example.com',
+      });
+
+      const session = await adapter.createSession(user.email, futureExpiry);
+      await expect(adapter.deleteExpiredSessions()).resolves.toBeUndefined();
+
+      const fetched = await adapter.getSession(session.id);
+      expect(fetched).not.toBeNull();
+    });
+
+    it('should delete all sessions when all are expired', async () => {
+      const user = await adapter.createUser({
+        email: 'alice@example.com',
+        name: 'Alice',
+        tokenHash: 'hash123',
+        role: 'tester',
+        invitedBy: 'admin@example.com',
+      });
+
+      const exp1 = await adapter.createSession(user.email, pastExpiry);
+      const exp2 = await adapter.createSession(
+        user.email,
+        new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      );
+
+      await adapter.deleteExpiredSessions();
+
+      expect(await adapter.getSession(exp1.id)).toBeNull();
+      expect(await adapter.getSession(exp2.id)).toBeNull();
+    });
   });
 });
 

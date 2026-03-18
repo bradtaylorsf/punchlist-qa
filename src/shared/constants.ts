@@ -1,14 +1,12 @@
+import type { LabelDef } from './schemas.js';
+
 export const DEFAULT_PORT = 4747;
 
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const CONFIG_FILENAME = 'punchlist.config.json';
 
-export interface LabelDef {
-  name: string;
-  color: string;
-  description: string;
-}
+export type { LabelDef };
 
 export const DEFAULT_LABELS: LabelDef[] = [
   { name: 'punchlist', color: '6f42c1', description: 'Punchlist QA tracked issue' },

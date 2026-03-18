@@ -85,7 +85,11 @@ describe('env', () => {
     });
 
     it('should read secrets from .env file without mutating process.env', () => {
-      writeFileSync(join(tempDir, '.env'), 'PUNCHLIST_GITHUB_TOKEN=from_file\nPUNCHLIST_AUTH_SECRET=secret_from_file\n', 'utf-8');
+      writeFileSync(
+        join(tempDir, '.env'),
+        'PUNCHLIST_GITHUB_TOKEN=from_file\nPUNCHLIST_AUTH_SECRET=secret_from_file\n',
+        'utf-8',
+      );
       const secrets = resolveSecrets(tempDir);
       expect(secrets.githubToken).toBe('from_file');
       expect(secrets.authSecret).toBe('secret_from_file');
@@ -125,15 +129,23 @@ describe('env', () => {
     it('should create a new .env file with header', () => {
       writeEnvFile({ MY_KEY: 'my_value' }, tempDir);
       const content = readFileSync(join(tempDir, '.env'), 'utf-8');
-      expect(content).toContain('MY_KEY=my_value');
+      // Values are wrapped in double quotes to handle special characters
+      expect(content).toContain('MY_KEY="my_value"');
       expect(content).toContain('do NOT commit');
+    });
+
+    it('should quote values with special characters', () => {
+      writeEnvFile({ MY_KEY: 'value with spaces', OTHER: 'has#hash' }, tempDir);
+      const content = readFileSync(join(tempDir, '.env'), 'utf-8');
+      expect(content).toContain('MY_KEY="value with spaces"');
+      expect(content).toContain('OTHER="has#hash"');
     });
 
     it('should append to existing .env without duplicating keys', () => {
       writeFileSync(join(tempDir, '.env'), 'EXISTING_KEY=val\n', 'utf-8');
       writeEnvFile({ EXISTING_KEY: 'new_val', NEW_KEY: 'new' }, tempDir);
       const content = readFileSync(join(tempDir, '.env'), 'utf-8');
-      expect(content).toContain('NEW_KEY=new');
+      expect(content).toContain('NEW_KEY="new"');
       // Should not duplicate EXISTING_KEY
       const matches = content.match(/EXISTING_KEY/g);
       expect(matches).toHaveLength(1);

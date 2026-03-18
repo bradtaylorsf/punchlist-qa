@@ -17,8 +17,10 @@ function parseEnvFile(content: string): Record<string, string> {
     const key = trimmed.slice(0, eqIndex).trim();
     let value = trimmed.slice(eqIndex + 1).trim();
     // Strip surrounding quotes
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     env[key] = value;
@@ -107,7 +109,7 @@ export function writeEnvFile(vars: Record<string, string>, cwd?: string): void {
   const lines: string[] = [];
   for (const [key, value] of Object.entries(vars)) {
     if (!existingKeys.has(key)) {
-      lines.push(`${key}=${value}`);
+      lines.push(`${key}="${value}"`);
     }
   }
 

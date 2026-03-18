@@ -120,6 +120,73 @@ const hasMore = rows.length > limit;
 const data = hasMore ? rows.slice(0, -1) : rows;
 ```
 
+## Validate Rows at the Boundary
+
+Database results are a system boundary — treat them like external input. Never use `as` type casts on query results; validate with Zod instead:
+
+```typescript
+// BAD — bypasses runtime validation
+const round = stmt.get(id) as TestRound;
+
+// GOOD — validates at the boundary
+const row = stmt.get(id);
+if (!row) throw new NotFoundError(`Round ${id} not found`);
+const round = roundSchema.parse({ id: row.id, status: row.status, createdAt: row.created_at });
+```
+
+Create row mapper functions that parse through domain schemas:
+
+```typescript
+function toTestRound(row: unknown): TestRound {
+  return roundSchema.parse(row);
+}
+
+const rounds = stmt.all(projectId).map(toTestRound);
+```
+
+Use `.safeParse()` when you want to handle invalid rows without throwing:
+
+```typescript
+const result = roundSchema.safeParse(row);
+if (!result.success) {
+  logger.warn('Invalid row in test_rounds', { rowId: row.id, errors: result.error.issues });
+  return null;
+}
+return result.data;
+```
+
+## Batch Large IN Clauses
+
+SQLite has a default `SQLITE_MAX_VARIABLE_NUMBER` limit (typically 999). When building `IN (?)` clauses with user-provided arrays, chunk them into batches:
+
+```typescript
+const BATCH_SIZE = 900; // Stay under the 999 limit
+
+function batchDelete(db: Database, ids: string[]): number {
+  let totalChanges = 0;
+
+  const deleteBatch = db.transaction((batch: string[]) => {
+    const placeholders = batch.map(() => '?').join(', ');
+    const stmt = db.prepare(`DELETE FROM test_cases WHERE id IN (${placeholders})`);
+    const result = stmt.run(...batch);
+    totalChanges += result.changes;
+  });
+
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+    deleteBatch(batch);
+  }
+
+  return totalChanges;
+}
+```
+
+Key points:
+- Chunk arrays into batches of ~900 to stay under the 999 variable limit
+- Sum `result.changes` across batches when returning affected row counts
+- Wrap each batch in a transaction for atomicity
+- This applies to any `IN (?)` clause — selects, updates, and deletes
+
 ## Guardrails
 
 - Never use string concatenation for SQL — always parameterized
@@ -128,3 +195,5 @@ const data = hasMore ? rows.slice(0, -1) : rows;
 - Use cursor-based pagination, never OFFSET
 - Store the database in `.punchlist/` directory
 - Run migrations on startup automatically
+- Always validate database rows through Zod schemas — never use `as` casts
+- Batch large `IN` clauses to stay under SQLite's variable limit

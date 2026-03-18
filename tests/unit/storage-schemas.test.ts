@@ -104,7 +104,10 @@ describe('userSchema', () => {
   });
 
   it('accepts admin role', () => {
-    expect(userSchema.parse({ ...validUser, role: 'admin' })).toEqual({ ...validUser, role: 'admin' });
+    expect(userSchema.parse({ ...validUser, role: 'admin' })).toEqual({
+      ...validUser,
+      role: 'admin',
+    });
   });
 
   it('rejects invalid role', () => {
@@ -123,16 +126,25 @@ describe('createRoundInputSchema', () => {
   });
 
   it('accepts optional description', () => {
-    const input = { name: 'Round 1', description: 'Desc', createdByEmail: 'a@b.com', createdByName: 'A' };
+    const input = {
+      name: 'Round 1',
+      description: 'Desc',
+      createdByEmail: 'a@b.com',
+      createdByName: 'A',
+    };
     expect(createRoundInputSchema.parse(input)).toEqual(input);
   });
 
   it('rejects missing name', () => {
-    expect(() => createRoundInputSchema.parse({ createdByEmail: 'a@b.com', createdByName: 'A' })).toThrow();
+    expect(() =>
+      createRoundInputSchema.parse({ createdByEmail: 'a@b.com', createdByName: 'A' }),
+    ).toThrow();
   });
 
   it('rejects empty name', () => {
-    expect(() => createRoundInputSchema.parse({ name: '', createdByEmail: 'a@b.com', createdByName: 'A' })).toThrow();
+    expect(() =>
+      createRoundInputSchema.parse({ name: '', createdByEmail: 'a@b.com', createdByName: 'A' }),
+    ).toThrow();
   });
 });
 
@@ -153,7 +165,12 @@ describe('updateRoundInputSchema', () => {
 
 describe('submitResultInputSchema', () => {
   it('accepts valid input', () => {
-    const input = { testId: 'auth-001', status: 'pass', testerName: 'Bob', testerEmail: 'bob@b.com' };
+    const input = {
+      testId: 'auth-001',
+      status: 'pass',
+      testerName: 'Bob',
+      testerEmail: 'bob@b.com',
+    };
     expect(submitResultInputSchema.parse(input)).toEqual(input);
   });
 
@@ -162,7 +179,14 @@ describe('submitResultInputSchema', () => {
   });
 
   it('rejects empty testId', () => {
-    expect(() => submitResultInputSchema.parse({ testId: '', status: 'pass', testerName: 'B', testerEmail: 'b@b.com' })).toThrow();
+    expect(() =>
+      submitResultInputSchema.parse({
+        testId: '',
+        status: 'pass',
+        testerName: 'B',
+        testerEmail: 'b@b.com',
+      }),
+    ).toThrow();
   });
 });
 
@@ -174,11 +198,19 @@ describe('createUserInputSchema', () => {
   });
 
   it('accepts explicit role', () => {
-    const input = { email: 'a@b.com', name: 'A', tokenHash: 'hash', role: 'admin', invitedBy: 'admin@b.com' };
+    const input = {
+      email: 'a@b.com',
+      name: 'A',
+      tokenHash: 'hash',
+      role: 'admin',
+      invitedBy: 'admin@b.com',
+    };
     expect(createUserInputSchema.parse(input).role).toBe('admin');
   });
 
   it('rejects missing tokenHash', () => {
-    expect(() => createUserInputSchema.parse({ email: 'a@b.com', name: 'A', invitedBy: 'admin@b.com' })).toThrow();
+    expect(() =>
+      createUserInputSchema.parse({ email: 'a@b.com', name: 'A', invitedBy: 'admin@b.com' }),
+    ).toThrow();
   });
 });

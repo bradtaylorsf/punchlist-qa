@@ -167,7 +167,7 @@ pnpm lint:fix             # Lint and auto-fix
 - **No Laziness:** Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact:** Changes should only touch what's necessary. Avoid introducing bugs.
 - **Security Always:** Parameterized queries, input validation, signed tokens, no secrets in logs.
-- **Type Safety:** TypeScript strict mode. Zod for runtime validation at system boundaries. No `any`.
+- **Type Safety:** TypeScript strict mode. Zod for runtime validation at ALL system boundaries — database rows, external API responses, user input, config files, and environment variables. No `any`.
 
 ---
 
@@ -180,6 +180,9 @@ pnpm lint:fix             # Lint and auto-fix
 - Always use `pnpm` — never `npm` or `yarn`.
 - Prefer existing patterns and utilities over creating new ones.
 - Always define validated types as Zod schemas in `src/shared/schemas.ts`. Derive TypeScript types with `z.infer<>`. Never manually duplicate type definitions.
+- Always run `pnpm lint` before creating a PR.
+- All delete/revoke operations are idempotent — silently no-op on missing records. Never throw for 'not found' on deletes.
+- Validate external API responses with Zod schemas — never use `as` type assertions on untrusted data.
 
 ---
 
@@ -198,3 +201,5 @@ Skills provide detailed patterns for specific domains. They live in `skills/` an
 | `dashboard-patterns` | QA dashboard: Express + React + Tailwind, test rounds, tester management |
 | `cli-patterns` | Init CLI: `npx punchlist-qa init`, config scaffolding, AI skill generation |
 | `auth-patterns` | Token-based JWT auth, signed invite links, middleware patterns |
+| `external-api-integration` | API response validation, pagination, rate limiting, error classification |
+| `session-management` | Session lifecycle, cleanup strategies, storage & cookie security |

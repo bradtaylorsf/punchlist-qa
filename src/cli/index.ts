@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const commands = ['init', 'serve', 'invite', 'revoke', 'users'] as const;
-type Command = typeof commands[number];
+type Command = (typeof commands)[number];
 
 function printHelp(): void {
   console.log(`
@@ -81,7 +81,9 @@ export async function main(argv: string[]): Promise<void> {
   }
 
   if (command !== 'invite' && (values.name || values.role || values['base-url'])) {
-    console.error(`Flags --name, --role, and --base-url are only valid with the "invite" command.\n`);
+    console.error(
+      `Flags --name, --role, and --base-url are only valid with the "invite" command.\n`,
+    );
     process.exit(1);
   }
 

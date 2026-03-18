@@ -7,7 +7,12 @@ import { execSync } from 'node:child_process';
 import { writeConfig } from '../../shared/config.js';
 import { writeEnvFile } from '../../shared/env.js';
 import { validateRepoFormat } from '../../shared/validation.js';
-import { DEFAULT_PORT, DEFAULT_LABELS, DEFAULT_CONFIG, CONFIG_FILENAME } from '../../shared/constants.js';
+import {
+  DEFAULT_PORT,
+  DEFAULT_LABELS,
+  DEFAULT_CONFIG,
+  CONFIG_FILENAME,
+} from '../../shared/constants.js';
 import { GitHubIssueAdapter } from '../../adapters/issues/github.js';
 import type { PunchlistConfig, AIToolChoice } from '../../shared/types.js';
 
@@ -15,7 +20,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function detectGitRepo(cwd: string): string | null {
   try {
-    const remote = execSync('git remote get-url origin', { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const remote = execSync('git remote get-url origin', {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
     // Handle SSH: git@github.com:owner/repo.git
     const sshMatch = remote.match(/github\.com[:/](.+?\/.+?)(?:\.git)?$/);
     if (sshMatch) return sshMatch[1];
@@ -32,7 +41,11 @@ function detectProjectName(cwd: string): string {
   return basename(cwd) || 'my-project';
 }
 
-function ask(rl: ReturnType<typeof createInterface>, question: string, defaultValue?: string): Promise<string> {
+function ask(
+  rl: ReturnType<typeof createInterface>,
+  question: string,
+  defaultValue?: string,
+): Promise<string> {
   const prompt = defaultValue ? `${question} (${defaultValue}): ` : `${question}: `;
   return new Promise((resolve) => {
     rl.question(prompt, (answer) => {
@@ -80,14 +93,21 @@ export async function initCommand(): Promise<void> {
     const token = await ask(rl, '  GitHub personal access token (stored in .env, not config)');
 
     const corsInput = await ask(rl, '  CORS domains (comma-separated)', 'http://localhost:3000');
-    const corsDomains = corsInput.split(',').map(d => d.trim()).filter(Boolean);
+    const corsDomains = corsInput
+      .split(',')
+      .map((d) => d.trim())
+      .filter(Boolean);
 
     console.log('\n  AI tool integration:');
     console.log('  1) Claude Code');
     console.log('  2) Codex');
     console.log('  3) None\n');
     const aiChoice = await ask(rl, '  Choose (1/2/3)', '1');
-    const aiToolMap: Record<string, AIToolChoice> = { '1': 'claude-code', '2': 'codex', '3': 'none' };
+    const aiToolMap: Record<string, AIToolChoice> = {
+      '1': 'claude-code',
+      '2': 'codex',
+      '3': 'none',
+    };
     const aiTool = aiToolMap[aiChoice] || 'claude-code';
 
     rl.close();
@@ -136,10 +156,13 @@ export async function initCommand(): Promise<void> {
 
     // Step 5: Copy AI skills
     if (aiTool !== 'none') {
-      const skillsSource = join(__dirname, '../../../skills', aiTool === 'claude-code' ? 'claude-code' : 'codex');
-      const skillsTarget = aiTool === 'claude-code'
-        ? join(cwd, '.claude', 'skills')
-        : join(cwd, '.codex', 'skills');
+      const skillsSource = join(
+        __dirname,
+        '../../../skills',
+        aiTool === 'claude-code' ? 'claude-code' : 'codex',
+      );
+      const skillsTarget =
+        aiTool === 'claude-code' ? join(cwd, '.claude', 'skills') : join(cwd, '.codex', 'skills');
 
       if (existsSync(skillsSource) && readdirSync(skillsSource).length > 0) {
         mkdirSync(skillsTarget, { recursive: true });
@@ -162,7 +185,9 @@ export async function initCommand(): Promise<void> {
 
     // Step 7: Output widget snippet
     console.log('\n  📋 Add this script tag to your app:\n');
-    console.log(`  <script src="http://localhost:${DEFAULT_PORT}/widget.js" data-project="${projectName}"></script>\n`);
+    console.log(
+      `  <script src="http://localhost:${DEFAULT_PORT}/widget.js" data-project="${projectName}"></script>\n`,
+    );
 
     // Step 8: Next steps
     console.log('  📝 Next steps:');
@@ -173,7 +198,6 @@ export async function initCommand(): Promise<void> {
     console.log('');
     console.log('  ⚠ Secrets are in .env — never commit that file.');
     console.log('  ✅ punchlist.config.json is safe to commit.\n');
-
   } catch (err) {
     rl.close();
     throw err;

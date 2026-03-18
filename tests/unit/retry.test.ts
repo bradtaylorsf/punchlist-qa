@@ -71,9 +71,7 @@ describe('retry utilities', () => {
     });
 
     it('should retry on transient failure then succeed', async () => {
-      const fn = vi.fn()
-        .mockRejectedValueOnce(new Error('transient'))
-        .mockResolvedValue('ok');
+      const fn = vi.fn().mockRejectedValueOnce(new Error('transient')).mockResolvedValue('ok');
 
       const promise = withRetry(fn, () => true, { maxRetries: 3, baseDelayMs: 100 });
       // Advance timers to trigger the retry delay
@@ -88,20 +86,22 @@ describe('retry utilities', () => {
       vi.useRealTimers();
       const fn = vi.fn().mockRejectedValue(new Error('persistent'));
 
-      await expect(
-        withRetry(fn, () => true, { maxRetries: 2, baseDelayMs: 10 })
-      ).rejects.toThrow('persistent');
+      await expect(withRetry(fn, () => true, { maxRetries: 2, baseDelayMs: 10 })).rejects.toThrow(
+        'persistent',
+      );
       expect(fn).toHaveBeenCalledTimes(3); // initial + 2 retries
 
       vi.useFakeTimers();
     });
 
     it('should cap delay at maxDelayMs', async () => {
-      const fn = vi.fn()
-        .mockRejectedValueOnce(new Error('transient'))
-        .mockResolvedValue('ok');
+      const fn = vi.fn().mockRejectedValueOnce(new Error('transient')).mockResolvedValue('ok');
 
-      const promise = withRetry(fn, () => true, { maxRetries: 3, baseDelayMs: 100_000, maxDelayMs: 50 });
+      const promise = withRetry(fn, () => true, {
+        maxRetries: 3,
+        baseDelayMs: 100_000,
+        maxDelayMs: 50,
+      });
       // maxDelayMs is 50ms, so even with large baseDelayMs, delay is capped
       await vi.advanceTimersByTimeAsync(100);
       const result = await promise;
@@ -113,9 +113,7 @@ describe('retry utilities', () => {
     it('should not retry when shouldRetry returns false', async () => {
       const fn = vi.fn().mockRejectedValue(new Error('fatal'));
 
-      await expect(
-        withRetry(fn, () => false, { maxRetries: 3 })
-      ).rejects.toThrow('fatal');
+      await expect(withRetry(fn, () => false, { maxRetries: 3 })).rejects.toThrow('fatal');
       expect(fn).toHaveBeenCalledTimes(1);
     });
   });

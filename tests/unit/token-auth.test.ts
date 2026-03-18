@@ -27,7 +27,9 @@ describe('TokenAuthAdapter', () => {
     });
 
     it('should throw with a short secret', () => {
-      expect(() => new TokenAuthAdapter({ secret: 'short', storage })).toThrow('at least 16 characters');
+      expect(() => new TokenAuthAdapter({ secret: 'short', storage })).toThrow(
+        'at least 16 characters',
+      );
     });
 
     it('should throw with an empty secret', () => {
@@ -119,7 +121,9 @@ describe('TokenAuthAdapter', () => {
 
     it('uses custom role when specified', async () => {
       const auth = new TokenAuthAdapter({ secret, storage });
-      const result = await auth.createInvite('admin@example.com', 'Admin', 'root@example.com', { role: 'admin' });
+      const result = await auth.createInvite('admin@example.com', 'Admin', 'root@example.com', {
+        role: 'admin',
+      });
 
       expect(result.user.role).toBe('admin');
     });
@@ -144,7 +148,9 @@ describe('TokenAuthAdapter', () => {
     it('throws on invalid role', async () => {
       const auth = new TokenAuthAdapter({ secret, storage });
       await expect(
-        auth.createInvite('alice@example.com', 'Alice', 'admin@example.com', { role: 'superadmin' }),
+        auth.createInvite('alice@example.com', 'Alice', 'admin@example.com', {
+          role: 'superadmin',
+        }),
       ).rejects.toThrow();
     });
 
@@ -168,9 +174,10 @@ describe('TokenAuthAdapter', () => {
       expect(user!.revoked).toBe(true);
     });
 
-    it('throws when revoking non-existent user', async () => {
+    it('is a no-op when revoking a non-existent user', async () => {
+      // revokeUser is idempotent — missing users are silently ignored at the storage layer.
       const auth = new TokenAuthAdapter({ secret, storage });
-      await expect(auth.revokeAccess('nobody@example.com')).rejects.toThrow('User not found');
+      await expect(auth.revokeAccess('nobody@example.com')).resolves.toBeUndefined();
     });
   });
 
@@ -282,7 +289,7 @@ describe('TokenAuthAdapter', () => {
       const sessionId = await auth.createSession('alice@example.com');
 
       // Wait for expiry
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       const user = await auth.validateSession(sessionId);
       expect(user).toBeNull();

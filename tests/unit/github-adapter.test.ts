@@ -69,7 +69,7 @@ describe('GitHubIssueAdapter', () => {
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'scoped-token');
         await expect(adapter.initialize()).rejects.toThrow(
-          'GitHub token lacks required permissions'
+          'GitHub token lacks required permissions',
         );
       });
 
@@ -84,7 +84,7 @@ describe('GitHubIssueAdapter', () => {
     describe('validateLabels', () => {
       it('should return missing label names', async () => {
         fetchMock.mockResolvedValueOnce(
-          mockResponse(200, [{ name: 'punchlist' }, { name: 'support' }])
+          mockResponse(200, [{ name: 'punchlist' }, { name: 'support' }]),
         );
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'token');
@@ -99,7 +99,7 @@ describe('GitHubIssueAdapter', () => {
 
       it('should return empty array when all labels exist', async () => {
         fetchMock.mockResolvedValueOnce(
-          mockResponse(200, [{ name: 'punchlist' }, { name: 'qa:fail' }])
+          mockResponse(200, [{ name: 'punchlist' }, { name: 'qa:fail' }]),
         );
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'token');
@@ -117,9 +117,7 @@ describe('GitHubIssueAdapter', () => {
         fetchMock.mockResolvedValueOnce(mockResponse(201));
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'token');
-        await adapter.addLabels([
-          { name: 'punchlist', color: '6f42c1', description: 'Tracked' },
-        ]);
+        await adapter.addLabels([{ name: 'punchlist', color: '6f42c1', description: 'Tracked' }]);
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [url, opts] = fetchMock.mock.calls[0];
@@ -137,9 +135,7 @@ describe('GitHubIssueAdapter', () => {
         fetchMock.mockResolvedValueOnce(mockResponse(200));
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'token');
-        await adapter.addLabels([
-          { name: 'qa:fail', color: 'e11d48', description: 'QA failure' },
-        ]);
+        await adapter.addLabels([{ name: 'qa:fail', color: 'e11d48', description: 'QA failure' }]);
 
         expect(fetchMock).toHaveBeenCalledTimes(2);
         const [patchUrl, patchOpts] = fetchMock.mock.calls[1];
@@ -151,7 +147,7 @@ describe('GitHubIssueAdapter', () => {
     describe('createQAFailureIssue', () => {
       it('should build correct title/body/labels and call createIssue', async () => {
         fetchMock.mockResolvedValueOnce(
-          mockResponse(201, { html_url: 'https://github.com/o/r/issues/1', id: 1, number: 1 })
+          mockResponse(201, { html_url: 'https://github.com/o/r/issues/1', id: 1, number: 1 }),
         );
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'token');
@@ -180,7 +176,7 @@ describe('GitHubIssueAdapter', () => {
     describe('createSupportTicketIssue', () => {
       it('should build correct title/body/labels', async () => {
         fetchMock.mockResolvedValueOnce(
-          mockResponse(201, { html_url: 'https://github.com/o/r/issues/2', id: 2, number: 2 })
+          mockResponse(201, { html_url: 'https://github.com/o/r/issues/2', id: 2, number: 2 }),
         );
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'token');
@@ -199,7 +195,7 @@ describe('GitHubIssueAdapter', () => {
 
       it('should omit category label when not provided', async () => {
         fetchMock.mockResolvedValueOnce(
-          mockResponse(201, { html_url: 'https://github.com/o/r/issues/3', id: 3, number: 3 })
+          mockResponse(201, { html_url: 'https://github.com/o/r/issues/3', id: 3, number: 3 }),
         );
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'token');
@@ -218,12 +214,14 @@ describe('GitHubIssueAdapter', () => {
       it('should return issue when found', async () => {
         fetchMock.mockResolvedValueOnce(
           mockResponse(200, {
-            items: [{
-              html_url: 'https://github.com/o/r/issues/5',
-              number: 5,
-              title: '[QA Failure] Login (auth-001)',
-            }],
-          })
+            items: [
+              {
+                html_url: 'https://github.com/o/r/issues/5',
+                number: 5,
+                title: '[QA Failure] Login (auth-001)',
+              },
+            ],
+          }),
         );
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'token');
@@ -261,12 +259,14 @@ describe('GitHubIssueAdapter', () => {
       it('should use cache on second call (fetch called only once)', async () => {
         fetchMock.mockResolvedValueOnce(
           mockResponse(200, {
-            items: [{
-              html_url: 'https://github.com/o/r/issues/5',
-              number: 5,
-              title: '[QA Failure] Login (auth-001)',
-            }],
-          })
+            items: [
+              {
+                html_url: 'https://github.com/o/r/issues/5',
+                number: 5,
+                title: '[QA Failure] Login (auth-001)',
+              },
+            ],
+          }),
         );
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'token');
@@ -301,7 +301,7 @@ describe('GitHubIssueAdapter', () => {
 
         // Create QA failure issue — this should invalidate the cache
         fetchMock.mockResolvedValueOnce(
-          mockResponse(201, { html_url: 'https://github.com/o/r/issues/10', id: 10, number: 10 })
+          mockResponse(201, { html_url: 'https://github.com/o/r/issues/10', id: 10, number: 10 }),
         );
         await adapter.createQAFailureIssue({
           testId: 'billing-001',
@@ -316,12 +316,14 @@ describe('GitHubIssueAdapter', () => {
         // Now search again — should hit API, not cache
         fetchMock.mockResolvedValueOnce(
           mockResponse(200, {
-            items: [{
-              html_url: 'https://github.com/o/r/issues/10',
-              number: 10,
-              title: '[QA Failure] Subscribe (billing-001)',
-            }],
-          })
+            items: [
+              {
+                html_url: 'https://github.com/o/r/issues/10',
+                number: 10,
+                title: '[QA Failure] Subscribe (billing-001)',
+              },
+            ],
+          }),
         );
         const result = await adapter.getOpenIssueForTest('billing-001');
 
@@ -338,7 +340,7 @@ describe('GitHubIssueAdapter', () => {
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'token');
         await expect(
-          adapter.createIssue({ title: 'test', body: 'test', labels: [] })
+          adapter.createIssue({ title: 'test', body: 'test', labels: [] }),
         ).rejects.toThrow('GitHub token is invalid');
       });
 
@@ -347,7 +349,7 @@ describe('GitHubIssueAdapter', () => {
 
         const adapter = new GitHubIssueAdapter('owner/repo', 'token');
         await expect(
-          adapter.createIssue({ title: 'test', body: 'test', labels: [] })
+          adapter.createIssue({ title: 'test', body: 'test', labels: [] }),
         ).rejects.toThrow('GitHub token lacks required permissions');
       });
     });

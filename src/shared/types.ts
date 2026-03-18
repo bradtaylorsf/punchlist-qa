@@ -31,4 +31,5 @@ export type {
   OpenIssue,
   CreateQAFailureOpts,
   CreateSupportTicketOpts,
+  LabelDef,
 } from './schemas.js';

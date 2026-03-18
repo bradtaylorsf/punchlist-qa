@@ -16,6 +16,11 @@ import {
 } from './format.js';
 import { withRetry, isRateLimitError, getRetryAfterMs } from './retry.js';
 import { TTLCache } from './cache.js';
+import {
+  createIssueResponseSchema,
+  searchIssuesResponseSchema,
+  labelResponseSchema,
+} from './schemas.js';
 
 export class RateLimitError extends Error {
   retryAfterMs: number;
@@ -47,8 +52,8 @@ export class GitHubIssueAdapter implements IssueAdapter {
     const res = await fetch(url, {
       method,
       headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Accept': 'application/vnd.github+json',
+        Authorization: `Bearer ${this.token}`,
+        Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
@@ -85,18 +90,18 @@ export class GitHubIssueAdapter implements IssueAdapter {
   }
 
   async createIssue(opts: CreateIssueOpts): Promise<CreatedIssue> {
-    const res = await this.requestWithRetry(
-      `/repos/${this.owner}/${this.repo}/issues`,
-      'POST',
-      { title: opts.title, body: opts.body, labels: opts.labels }
-    );
+    const res = await this.requestWithRetry(`/repos/${this.owner}/${this.repo}/issues`, 'POST', {
+      title: opts.title,
+      body: opts.body,
+      labels: opts.labels,
+    });
 
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`Failed to create issue: ${res.status} ${text}`);
     }
 
-    const data = await res.json() as { html_url: string; id: number; number: number };
+    const data = createIssueResponseSchema.parse(await res.json());
     return { url: data.html_url, id: String(data.id), number: data.number };
   }
 
@@ -124,38 +129,59 @@ export class GitHubIssueAdapter implements IssueAdapter {
     const query = `repo:${this.owner}/${this.repo} is:issue is:open "punchlist:testId=${testId}" in:body`;
     const res = await this.requestWithRetry(
       `/search/issues?q=${encodeURIComponent(query)}&per_page=1`,
-      'GET'
+      'GET',
     );
     // Don't cache API errors — only cache successful lookups
-    if (!res.ok) return null;
-    const data = await res.json() as { items: Array<{ html_url: string; number: number; title: string }> };
-    const result = data.items.length === 0
-      ? null
-      : { url: data.items[0].html_url, number: data.items[0].number, title: data.items[0].title };
+    if (!res.ok) {
+      console.warn(
+        `[punchlist] getOpenIssueForTest: GitHub API returned ${res.status} for testId="${testId}". Check token permissions or rate limits.`,
+      );
+      return null;
+    }
+    const data = searchIssuesResponseSchema.parse(await res.json());
+    const result =
+      data.items.length === 0
+        ? null
+        : { url: data.items[0].html_url, number: data.items[0].number, title: data.items[0].title };
     this.issueCache.set(testId, result);
     return result;
   }
 
   async validateLabels(labels: LabelDef[]): Promise<string[]> {
-    const res = await this.requestWithRetry(
-      `/repos/${this.owner}/${this.repo}/labels?per_page=100`,
-      'GET'
-    );
-    if (!res.ok) {
-      throw new Error(`Failed to fetch labels: ${res.status}`);
+    const perPage = 100;
+    const existingNames = new Set<string>();
+    let page = 1;
+
+    const MAX_PAGES = 100;
+    while (page <= MAX_PAGES) {
+      const res = await this.requestWithRetry(
+        `/repos/${this.owner}/${this.repo}/labels?per_page=${perPage}&page=${page}`,
+        'GET',
+      );
+      if (!res.ok) {
+        throw new Error(`Failed to fetch labels: ${res.status}`);
+      }
+      const batch = labelResponseSchema.parse(await res.json());
+      for (const label of batch) {
+        existingNames.add(label.name);
+      }
+      // If the batch is smaller than perPage, we've reached the last page.
+      if (batch.length < perPage) {
+        break;
+      }
+      page++;
     }
-    const existing = (await res.json()) as Array<{ name: string }>;
-    const existingNames = new Set(existing.map((l) => l.name));
+
     return labels.filter((l) => !existingNames.has(l.name)).map((l) => l.name);
   }
 
   async addLabels(labels: LabelDef[]): Promise<void> {
     for (const label of labels) {
-      const res = await this.requestWithRetry(
-        `/repos/${this.owner}/${this.repo}/labels`,
-        'POST',
-        { name: label.name, color: label.color, description: label.description }
-      );
+      const res = await this.requestWithRetry(`/repos/${this.owner}/${this.repo}/labels`, 'POST', {
+        name: label.name,
+        color: label.color,
+        description: label.description,
+      });
 
       if (!res.ok) {
         const status = res.status;
@@ -163,7 +189,7 @@ export class GitHubIssueAdapter implements IssueAdapter {
           await this.requestWithRetry(
             `/repos/${this.owner}/${this.repo}/labels/${encodeURIComponent(label.name)}`,
             'PATCH',
-            { color: label.color, description: label.description }
+            { color: label.color, description: label.description },
           );
         } else {
           const text = await res.text();

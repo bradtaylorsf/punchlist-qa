@@ -26,7 +26,7 @@ export function loadConfig(cwd?: string): ResolvedConfig {
     parsed = JSON.parse(raw);
   } catch (err) {
     const message = err instanceof SyntaxError ? err.message : 'unknown error';
-    throw new Error(`Failed to parse ${CONFIG_FILENAME}: ${message}`);
+    throw new Error(`Failed to parse ${CONFIG_FILENAME}: ${message}`, { cause: err });
   }
   const config = punchlistConfigSchema.parse(parsed);
 

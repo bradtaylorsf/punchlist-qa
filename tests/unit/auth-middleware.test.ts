@@ -32,7 +32,9 @@ afterEach(async () => {
 
 describe('parseCookie', () => {
   it('extracts named cookie from header', () => {
-    expect(parseCookie('foo=bar; punchlist_session=abc123; baz=qux', 'punchlist_session')).toBe('abc123');
+    expect(parseCookie('foo=bar; punchlist_session=abc123; baz=qux', 'punchlist_session')).toBe(
+      'abc123',
+    );
   });
 
   it('returns undefined for missing cookie', () => {
@@ -157,7 +159,7 @@ describe('authenticateRequest', () => {
     await shortAuth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
     const sessionId = await shortAuth.createSession('alice@example.com');
 
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     const cookieHeader = `punchlist_session=${sessionId}`;
     const user = await authenticateRequest(shortAuth, cookieHeader);

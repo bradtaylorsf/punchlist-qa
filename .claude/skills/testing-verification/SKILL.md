@@ -97,6 +97,72 @@ describe('POST /api/test-rounds', () => {
 });
 ```
 
+## Auth-Critical Code Requires Test Coverage
+
+Session management, token validation, and auth middleware are security-critical paths that must have comprehensive tests. Never ship auth code without tests.
+
+What to cover:
+- **Happy path:** valid token grants access, correct user context is set
+- **Expiry:** expired tokens are rejected with the correct status code
+- **Revocation:** revoked users/sessions cannot authenticate
+- **FK constraint violations:** deleting a user cascades or blocks correctly
+- **Edge cases:** malformed tokens, missing headers, tampered payloads
+
+```typescript
+describe('Auth Middleware', () => {
+  it('should allow requests with a valid token', async () => {
+    const res = await request(app)
+      .get('/api/test-rounds')
+      .set('Authorization', `Bearer ${validToken}`);
+    expect(res.status).toBe(200);
+  });
+
+  it('should reject expired tokens', async () => {
+    const res = await request(app)
+      .get('/api/test-rounds')
+      .set('Authorization', `Bearer ${expiredToken}`);
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('TOKEN_EXPIRED');
+  });
+
+  it('should reject revoked users', async () => {
+    await revokeUser(userId);
+    const res = await request(app)
+      .get('/api/test-rounds')
+      .set('Authorization', `Bearer ${validTokenForRevokedUser}`);
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('USER_REVOKED');
+  });
+});
+```
+
+## Raise Coverage Thresholds Over Time
+
+Coverage thresholds should increase monotonically as the codebase matures — never lower them.
+
+Recommended progression:
+- **Early stage (first few epics):** 50% — get the baseline established
+- **Mid stage:** 70% — most core paths are covered
+- **Mature:** 80%+ — comprehensive coverage across branches and edge cases
+
+Focus on meaningful coverage:
+- Branch coverage matters more than line coverage
+- Test edge cases and error paths, not just happy paths
+- A single test that covers 10 lines of straight-line code is less valuable than 3 tests covering 3 different branches
+
+To update thresholds in `vitest.config.ts`:
+
+```typescript
+coverage: {
+  thresholds: {
+    statements: 70,
+    branches: 70,
+    functions: 70,
+    lines: 70,
+  },
+}
+```
+
 ## Guardrails
 
 - Never mark a task complete without running `pnpm test`
@@ -104,3 +170,5 @@ describe('POST /api/test-rounds', () => {
 - If tests are flaky, fix them — don't ignore them
 - Comment on the GitHub issue if tests reveal unexpected behavior
 - Always use `pnpm` to run tests — never `npm`
+- Never ship auth code without comprehensive test coverage
+- Never lower coverage thresholds — only raise them

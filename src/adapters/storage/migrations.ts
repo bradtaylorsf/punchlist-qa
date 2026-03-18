@@ -1,4 +1,7 @@
 import type Database from 'better-sqlite3';
+import { z } from 'zod';
+
+const migrationVersionRow = z.object({ version: z.number() });
 
 export interface Migration {
   version: number;
@@ -85,13 +88,18 @@ export function runMigrations(db: Database.Database): void {
   `);
 
   const applied = new Set(
-    db.prepare('SELECT version FROM migrations').all().map((r) => (r as { version: number }).version),
+    db
+      .prepare('SELECT version FROM migrations')
+      .all()
+      .map((r) => migrationVersionRow.parse(r).version),
   );
 
   const pending = migrations.filter((m) => !applied.has(m.version));
   if (pending.length === 0) return;
 
-  const insert = db.prepare('INSERT INTO migrations (version, description, applied_at) VALUES (?, ?, ?)');
+  const insert = db.prepare(
+    'INSERT INTO migrations (version, description, applied_at) VALUES (?, ?, ?)',
+  );
 
   const applyAll = db.transaction(() => {
     for (const m of pending) {
