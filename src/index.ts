@@ -1,11 +1,15 @@
 export { loadConfig, writeConfig } from './shared/config.js';
 export type { ResolvedConfig } from './shared/config.js';
 export { readEnvFile, loadEnv, resolveSecrets, writeEnvFile } from './shared/env.js';
-export { punchlistConfigSchema, testCaseSchema, testerSchema } from './shared/schemas.js';
+export { punchlistConfigSchema, testCaseSchema, testerSchema, categorySchema } from './shared/schemas.js';
+export { ConfigFetcher, ConfigFetcherError } from './shared/config-fetcher.js';
+export type { ConfigFetcherOpts } from './shared/config-fetcher.js';
 export type {
   PunchlistConfig,
   TestCase,
   TestRound,
   TestResult,
   Tester,
+  Category,
+  TestCasePriority,
 } from './shared/types.js';

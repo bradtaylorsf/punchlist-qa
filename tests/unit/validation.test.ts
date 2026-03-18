@@ -105,6 +105,102 @@ describe('validateEmail', () => {
   });
 });
 
+describe('cross-field validation', () => {
+  const baseConfig = {
+    projectName: 'test-project',
+    issueTracker: { type: 'github', repo: 'owner/repo' },
+    storage: { type: 'sqlite', path: './punchlist.db' },
+    auth: { type: 'token' },
+    widget: { position: 'bottom-right', theme: 'light', corsDomains: ['http://localhost:3000'] },
+    aiTool: 'claude-code',
+    testers: [],
+  };
+
+  it('should pass with valid categories and matching test cases', () => {
+    const config = {
+      ...baseConfig,
+      categories: [{ id: 'auth', label: 'Auth' }],
+      testCases: [
+        { id: 'auth-001', title: 'Login test', category: 'auth', priority: 'high', instructions: 'Login', expectedResult: 'Success' },
+      ],
+    };
+    const result = validateConfig(config);
+    expect(result.valid).toBe(true);
+  });
+
+  it('should pass with hyphenated category names', () => {
+    const config = {
+      ...baseConfig,
+      categories: [{ id: 'user-auth', label: 'User Auth' }],
+      testCases: [
+        { id: 'user-auth-001', title: 'Login test', category: 'user-auth', priority: 'high', instructions: 'Login', expectedResult: 'Success' },
+      ],
+    };
+    const result = validateConfig(config);
+    expect(result.valid).toBe(true);
+  });
+
+  it('should pass with empty categories and empty test cases', () => {
+    const config = { ...baseConfig, categories: [], testCases: [] };
+    const result = validateConfig(config);
+    expect(result.valid).toBe(true);
+  });
+
+  it('should reject duplicate category IDs', () => {
+    const config = {
+      ...baseConfig,
+      categories: [
+        { id: 'auth', label: 'Auth' },
+        { id: 'auth', label: 'Auth Duplicate' },
+      ],
+      testCases: [],
+    };
+    const result = validateConfig(config);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.includes('Duplicate category ID'))).toBe(true);
+  });
+
+  it('should reject duplicate test case IDs', () => {
+    const config = {
+      ...baseConfig,
+      categories: [{ id: 'auth', label: 'Auth' }],
+      testCases: [
+        { id: 'auth-001', title: 'Test 1', category: 'auth', priority: 'high', instructions: 'Do X', expectedResult: 'Y' },
+        { id: 'auth-001', title: 'Test 2', category: 'auth', priority: 'low', instructions: 'Do Z', expectedResult: 'W' },
+      ],
+    };
+    const result = validateConfig(config);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.includes('Duplicate test case ID'))).toBe(true);
+  });
+
+  it('should reject invalid category reference with suggestion', () => {
+    const config = {
+      ...baseConfig,
+      categories: [{ id: 'auth', label: 'Auth' }, { id: 'checkout', label: 'Checkout' }],
+      testCases: [
+        { id: 'auht-001', title: 'Test', category: 'auht', priority: 'high', instructions: 'Do X', expectedResult: 'Y' },
+      ],
+    };
+    const result = validateConfig(config);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.includes('not found') && e.includes('Did you mean'))).toBe(true);
+  });
+
+  it('should reject test ID prefix that does not match category', () => {
+    const config = {
+      ...baseConfig,
+      categories: [{ id: 'auth', label: 'Auth' }, { id: 'checkout', label: 'Checkout' }],
+      testCases: [
+        { id: 'checkout-001', title: 'Test', category: 'auth', priority: 'high', instructions: 'Do X', expectedResult: 'Y' },
+      ],
+    };
+    const result = validateConfig(config);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.includes('does not match category'))).toBe(true);
+  });
+});
+
 describe('validateRepoFormat', () => {
   it('should accept valid repo formats', () => {
     expect(validateRepoFormat('owner/repo')).toBe(true);

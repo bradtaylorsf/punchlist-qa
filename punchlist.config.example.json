@@ -16,9 +16,31 @@
     "theme": "light",
     "corsDomains": [
       "http://localhost:3000"
-    ]
+    ],
+    "categories": ["auth", "checkout"]
   },
   "aiTool": "claude-code",
-  "testCases": [],
+  "categories": [
+    {
+      "id": "auth",
+      "label": "Authentication",
+      "description": "Login, signup, password reset flows"
+    },
+    {
+      "id": "checkout",
+      "label": "Checkout",
+      "description": "Cart and payment flows"
+    }
+  ],
+  "testCases": [
+    {
+      "id": "auth-001",
+      "title": "Login with valid credentials",
+      "category": "auth",
+      "priority": "high",
+      "instructions": "Navigate to /login, enter valid email and password, click Submit",
+      "expectedResult": "User is redirected to dashboard"
+    }
+  ],
   "testers": []
 }

@@ -15,4 +15,6 @@ export type {
   StorageAdapterType,
   AuthAdapterType,
   AIToolChoice,
+  Category,
+  TestCasePriority,
 } from './schemas.js';

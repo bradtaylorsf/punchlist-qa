@@ -98,8 +98,9 @@ export async function initCommand(): Promise<void> {
       issueTracker: { type: 'github', repo },
       storage: { ...DEFAULT_CONFIG.storage },
       auth: { type: 'token' },
-      widget: { ...DEFAULT_CONFIG.widget, corsDomains },
+      widget: { ...DEFAULT_CONFIG.widget, corsDomains, categories: [] },
       aiTool,
+      categories: [],
       testCases: [],
       testers: [],
     };
