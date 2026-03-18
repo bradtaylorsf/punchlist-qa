@@ -16,7 +16,7 @@ export async function inviteCommand(email: string, options: InviteOptions): Prom
   const { auth, storage } = await initAdapters();
 
   try {
-    const result = await auth.createInvite(email, options.name, 'cli@punchlist-qa', {
+    const result = await auth.createInvite(email, options.name, 'cli@punchlist-qa.local', {
       role: options.role,
       baseUrl: options.baseUrl,
     });
