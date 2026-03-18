@@ -14,15 +14,20 @@ Usage:
   punchlist-qa <command> [options]
 
 Commands:
-  init              Initialize Punchlist QA in a project
-  serve             Start the QA dashboard server
-  invite <email>    Generate a tester invite link
-  revoke <email>    Revoke a tester's access
-  users             List active testers
+  init                          Initialize Punchlist QA in a project
+  serve                         Start the QA dashboard server
+  invite <email> --name <name>  Generate a tester invite link
+  revoke <email>                Revoke a tester's access
+  users                         List all users
 
 Options:
   --help, -h        Show this help message
   --version, -v     Show version number
+
+Invite options:
+  --name <name>     Tester's display name (required)
+  --role <role>     User role: tester or admin (default: tester)
+  --base-url <url>  Base URL for invite link
 
 Interactive mode:
   punchlist-qa              Run with no args to enter interactive mode
@@ -42,6 +47,9 @@ export async function main(argv: string[]): Promise<void> {
     options: {
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'v', default: false },
+      name: { type: 'string' },
+      role: { type: 'string' },
+      'base-url': { type: 'string' },
     },
     allowPositionals: true,
     strict: false,
@@ -86,11 +94,20 @@ export async function main(argv: string[]): Promise<void> {
     case 'invite': {
       const email = positionals[1];
       if (!email) {
-        console.error('Usage: punchlist-qa invite <email>');
+        console.error('Usage: punchlist-qa invite <email> --name <name>');
+        process.exit(1);
+      }
+      const name = values.name as string | undefined;
+      if (!name) {
+        console.error('Usage: punchlist-qa invite <email> --name <name>\n  --name is required');
         process.exit(1);
       }
       const { inviteCommand } = await import('./commands/invite.js');
-      await inviteCommand(email);
+      await inviteCommand(email, {
+        name,
+        role: values.role as string | undefined,
+        baseUrl: values['base-url'] as string | undefined,
+      });
       break;
     }
     case 'revoke': {

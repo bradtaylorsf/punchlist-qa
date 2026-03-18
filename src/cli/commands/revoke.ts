@@ -1,28 +1,20 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { loadConfig, writeConfig } from '../../shared/config.js';
-import { CONFIG_FILENAME } from '../../shared/constants.js';
+import { initAdapters } from '../helpers.js';
 
 export async function revokeCommand(email: string): Promise<void> {
-  const cwd = process.cwd();
-  const configPath = join(cwd, CONFIG_FILENAME);
+  const { auth, storage } = await initAdapters();
 
-  if (!existsSync(configPath)) {
-    console.error(`\n  No ${CONFIG_FILENAME} found. Run "punchlist-qa init" first.\n`);
+  try {
+    await auth.revokeAccess(email);
+    console.log(`\n  Revoked access for ${email}\n`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes('User not found')) {
+      console.error(`\n  No user found with email: ${email}\n`);
+    } else {
+      console.error(`\n  Failed to revoke: ${message}\n`);
+    }
     process.exit(1);
+  } finally {
+    await storage.close();
   }
-
-  const resolved = loadConfig(cwd);
-
-  const tester = resolved.testers.find(t => t.email === email && !t.revokedAt);
-  if (!tester) {
-    console.error(`\n  No active tester found with email: ${email}\n`);
-    process.exit(1);
-  }
-
-  tester.revokedAt = new Date().toISOString();
-  const { secrets: _, ...config } = resolved;
-  writeConfig(config, cwd);
-
-  console.log(`\n  ✅ Revoked access for ${email}\n`);
 }
