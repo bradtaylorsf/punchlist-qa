@@ -1,9 +1,14 @@
 {
   "hooks": {
-    "Bash": [
+    "PreToolUse": [
       {
-        "matcher": "gh pr create",
-        "hook": "bash -c 'ARGS=\"$CLAUDE_TOOL_INPUT\"; if ! echo \"$ARGS\" | grep -qiE \"closes? #[0-9]+|fixes? #[0-9]+|resolves? #[0-9]+\"; then echo \"⚠️ BLOCKED: PR must include \\\"closes #N\\\" in the body to link GitHub issues. Add issue references before creating the PR.\" >&2; exit 1; fi'"
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'ARGS=\"$CLAUDE_TOOL_INPUT\"; if echo \"$ARGS\" | grep -q \"gh pr create\"; then if ! echo \"$ARGS\" | grep -qiE \"closes? #[0-9]+|fixes? #[0-9]+|resolves? #[0-9]+\"; then echo \"⚠️ BLOCKED: PR must include \\\"closes #N\\\" in the body to link GitHub issues. Add issue references before creating the PR.\" >&2; exit 1; fi; fi'"
+          }
+        ]
       }
     ]
   }
