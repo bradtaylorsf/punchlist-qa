@@ -33,4 +33,5 @@ export type {
   CreateSupportTicketOpts,
   LabelDef,
   SupportTicketRequest,
+  LoginRequest,
 } from './schemas.js';

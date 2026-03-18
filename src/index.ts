@@ -22,6 +22,7 @@ export {
   createSupportTicketOptsSchema,
   labelDefSchema,
   supportTicketRequestSchema,
+  loginRequestSchema,
 } from './shared/schemas.js';
 export { ConfigFetcher, ConfigFetcherError } from './shared/config-fetcher.js';
 export type { ConfigFetcherOpts } from './shared/config-fetcher.js';
@@ -49,6 +50,7 @@ export type {
   CreateSupportTicketOpts,
   LabelDef,
   SupportTicketRequest,
+  LoginRequest,
 } from './shared/types.js';
 export { SqliteAdapter } from './adapters/storage/index.js';
 export type { StorageAdapter } from './adapters/storage/types.js';
