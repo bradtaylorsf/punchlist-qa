@@ -147,6 +147,15 @@ export const createUserInputSchema = z.object({
   invitedBy: z.string().email(),
 });
 
+// --- Session schema ---
+
+export const sessionSchema = z.object({
+  id: z.string(),
+  userEmail: z.string().email(),
+  expiresAt: z.string(),
+  createdAt: z.string(),
+});
+
 // --- Main config schema ---
 
 export const punchlistConfigSchema = z.object({
@@ -243,3 +252,4 @@ export type CreateRoundInput = z.infer<typeof createRoundInputSchema>;
 export type UpdateRoundInput = z.infer<typeof updateRoundInputSchema>;
 export type SubmitResultInput = z.infer<typeof submitResultInputSchema>;
 export type CreateUserInput = z.infer<typeof createUserInputSchema>;
+export type Session = z.infer<typeof sessionSchema>;
