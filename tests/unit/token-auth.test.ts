@@ -140,6 +140,21 @@ describe('TokenAuthAdapter', () => {
         auth.createInvite('alice@example.com', 'Alice2', 'admin@example.com'),
       ).rejects.toThrow();
     });
+
+    it('throws on invalid role', async () => {
+      const auth = new TokenAuthAdapter({ secret, storage });
+      await expect(
+        auth.createInvite('alice@example.com', 'Alice', 'admin@example.com', { role: 'superadmin' }),
+      ).rejects.toThrow();
+    });
+
+    it('URL-encodes the token in invite URL', async () => {
+      const auth = new TokenAuthAdapter({ secret, storage, baseUrl: 'https://app.test' });
+      const result = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
+      // The invite URL should contain an encoded token (no raw special chars)
+      const url = new URL(result.inviteUrl);
+      expect(url.searchParams.get('token')).toBe(result.token);
+    });
   });
 
   describe('revocation', () => {
@@ -167,6 +182,42 @@ describe('TokenAuthAdapter', () => {
 
       const users = await auth.listUsers();
       expect(users).toHaveLength(2);
+    });
+  });
+
+  describe('loginWithToken', () => {
+    it('creates session when token hash matches stored user', async () => {
+      const auth = new TokenAuthAdapter({ secret, storage });
+      const invite = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
+
+      const sessionId = await auth.loginWithToken(invite.token);
+      expect(sessionId).toBeTruthy();
+
+      const user = await auth.validateSession(sessionId);
+      expect(user).not.toBeNull();
+      expect(user!.email).toBe('alice@example.com');
+    });
+
+    it('rejects a valid HMAC token whose hash is not in storage', async () => {
+      const auth = new TokenAuthAdapter({ secret, storage });
+      await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
+
+      // Generate a new token — valid HMAC but different nonce, so different hash
+      const freshToken = auth.generateToken('alice@example.com');
+      await expect(auth.loginWithToken(freshToken)).rejects.toThrow('Token not recognized');
+    });
+
+    it('rejects token for revoked user', async () => {
+      const auth = new TokenAuthAdapter({ secret, storage });
+      const invite = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
+      await auth.revokeAccess('alice@example.com');
+
+      await expect(auth.loginWithToken(invite.token)).rejects.toThrow('revoked');
+    });
+
+    it('rejects invalid token', async () => {
+      const auth = new TokenAuthAdapter({ secret, storage });
+      await expect(auth.loginWithToken('garbage-token')).rejects.toThrow('Invalid');
     });
   });
 

@@ -26,7 +26,7 @@ export async function initAdapters(cwd?: string): Promise<{
     process.exit(1);
   }
 
-  const dbPath = join(dir, config.storage.path ?? '.punchlist/punchlist.db');
+  const dbPath = join(dir, config.storage.path);
   const storage = new SqliteAdapter({ dbPath });
   await storage.initialize();
 

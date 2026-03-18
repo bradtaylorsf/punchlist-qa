@@ -26,6 +26,9 @@ export interface AuthAdapter {
   revokeAccess(email: string): Promise<void>;
   listUsers(): Promise<User[]>;
 
+  // Login (validates token hash against stored user, creates session)
+  loginWithToken(token: string): Promise<string>;
+
   // Session operations (for Express middleware in Epic 7)
   createSession(email: string): Promise<string>;
   validateSession(sessionId: string): Promise<User | null>;

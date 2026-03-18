@@ -80,6 +80,11 @@ export async function main(argv: string[]): Promise<void> {
     process.exit(1);
   }
 
+  if (command !== 'invite' && (values.name || values.role || values['base-url'])) {
+    console.error(`Flags --name, --role, and --base-url are only valid with the "invite" command.\n`);
+    process.exit(1);
+  }
+
   switch (command) {
     case 'init': {
       const { initCommand } = await import('./commands/init.js');

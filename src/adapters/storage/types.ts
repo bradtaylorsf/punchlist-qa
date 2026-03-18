@@ -80,6 +80,9 @@ export interface StorageAdapter {
   /** Get a session by ID, or null if not found */
   getSession(id: string): Promise<Session | null>;
 
+  /** Get a session with its associated user in a single query, or null if not found */
+  getSessionWithUser(id: string): Promise<{ session: Session; user: User } | null>;
+
   /** Delete a session by ID */
   deleteSession(id: string): Promise<void>;
 

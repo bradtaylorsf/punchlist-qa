@@ -1,5 +1,6 @@
 import type { AuthAdapter } from './types.js';
 import type { User } from '../../shared/types.js';
+import { SESSION_TTL_MS } from '../../shared/constants.js';
 
 export interface SessionCookieOptions {
   name?: string;
@@ -9,14 +10,12 @@ export interface SessionCookieOptions {
   path?: string;
 }
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-
 function resolveOptions(options?: SessionCookieOptions) {
   return {
     name: options?.name ?? 'punchlist_session',
     secure: options?.secure ?? process.env.NODE_ENV === 'production',
     sameSite: options?.sameSite ?? 'Lax',
-    maxAgeMs: options?.maxAgeMs ?? SEVEN_DAYS_MS,
+    maxAgeMs: options?.maxAgeMs ?? SESSION_TTL_MS,
     path: options?.path ?? '/',
   };
 }
@@ -74,7 +73,7 @@ export function buildClearCookie(name: string, options?: SessionCookieOptions): 
 }
 
 /**
- * Handle login: validate token, create session, return cookie.
+ * Handle login: validate token against stored hash, create session, return cookie.
  */
 export async function handleLogin(
   auth: AuthAdapter,
@@ -83,18 +82,14 @@ export async function handleLogin(
 ): Promise<{ sessionId: string; cookie: string } | { error: string; status: number }> {
   const opts = resolveOptions(options);
 
-  const validation = auth.validateToken(token);
-  if (!validation.valid || !validation.email) {
-    return { error: 'Invalid or expired token', status: 401 };
-  }
-
   try {
-    const sessionId = await auth.createSession(validation.email);
+    const sessionId = await auth.loginWithToken(token);
     const cookie = buildSetCookie(opts.name, sessionId, options);
     return { sessionId, cookie };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Login failed';
-    return { error: message, status: 403 };
+    const status = message.includes('Invalid') || message.includes('not recognized') ? 401 : 403;
+    return { error: message, status };
   }
 }
 

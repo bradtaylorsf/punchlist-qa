@@ -310,6 +310,30 @@ export class SqliteAdapter implements StorageAdapter {
     return row ? rowToSession(row) : null;
   }
 
+  async getSessionWithUser(id: string): Promise<{ session: Session; user: User } | null> {
+    const row = this.getDb().prepare(
+      `SELECT
+        s.id AS s_id, s.user_email AS s_user_email, s.expires_at AS s_expires_at, s.created_at AS s_created_at,
+        u.id AS u_id, u.email AS u_email, u.name AS u_name, u.token_hash AS u_token_hash,
+        u.role AS u_role, u.invited_by AS u_invited_by, u.revoked AS u_revoked, u.created_at AS u_created_at
+       FROM sessions s
+       JOIN users u ON s.user_email = u.email
+       WHERE s.id = ?`,
+    ).get(id) as {
+      s_id: string; s_user_email: string; s_expires_at: string; s_created_at: string;
+      u_id: string; u_email: string; u_name: string; u_token_hash: string;
+      u_role: string; u_invited_by: string; u_revoked: number; u_created_at: string;
+    } | undefined;
+    if (!row) return null;
+    return {
+      session: { id: row.s_id, userEmail: row.s_user_email, expiresAt: row.s_expires_at, createdAt: row.s_created_at },
+      user: rowToUser({
+        id: row.u_id, email: row.u_email, name: row.u_name, token_hash: row.u_token_hash,
+        role: row.u_role, invited_by: row.u_invited_by, revoked: row.u_revoked, created_at: row.u_created_at,
+      }),
+    };
+  }
+
   async deleteSession(id: string): Promise<void> {
     this.getDb().prepare('DELETE FROM sessions WHERE id = ?').run(id);
   }

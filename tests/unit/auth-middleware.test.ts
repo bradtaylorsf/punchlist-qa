@@ -79,14 +79,10 @@ describe('buildClearCookie', () => {
 });
 
 describe('handleLogin', () => {
-  it('creates session and returns cookie for valid token', async () => {
-    await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-    const token = auth.generateToken('alice@example.com');
+  it('creates session and returns cookie for valid invite token', async () => {
+    const invite = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
 
-    // We need to associate the token with the user — the invite already created a user,
-    // but the login token needs to match a valid user. Since createInvite already
-    // created the user, and validateToken just validates HMAC, createSession looks up by email.
-    const result = await handleLogin(auth, token, { secure: false });
+    const result = await handleLogin(auth, invite.token, { secure: false });
 
     expect('sessionId' in result).toBe(true);
     if ('sessionId' in result) {
@@ -104,12 +100,24 @@ describe('handleLogin', () => {
     }
   });
 
-  it('returns error for revoked user', async () => {
+  it('rejects a valid HMAC token that was not used for invite', async () => {
     await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-    await auth.revokeAccess('alice@example.com');
-    const token = auth.generateToken('alice@example.com');
+    // Generate a fresh token — valid HMAC but hash doesn't match stored user
+    const freshToken = auth.generateToken('alice@example.com');
 
-    const result = await handleLogin(auth, token, { secure: false });
+    const result = await handleLogin(auth, freshToken, { secure: false });
+
+    expect('error' in result).toBe(true);
+    if ('error' in result) {
+      expect(result.status).toBe(401);
+    }
+  });
+
+  it('returns error for revoked user', async () => {
+    const invite = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
+    await auth.revokeAccess('alice@example.com');
+
+    const result = await handleLogin(auth, invite.token, { secure: false });
 
     expect('error' in result).toBe(true);
     if ('error' in result) {

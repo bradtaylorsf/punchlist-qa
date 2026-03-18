@@ -2,8 +2,8 @@ import { createHmac, createHash, randomBytes, timingSafeEqual } from 'node:crypt
 import type { AuthAdapter, TokenValidation, InviteResult } from './types.js';
 import type { StorageAdapter } from '../storage/types.js';
 import type { User } from '../../shared/types.js';
-
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+import { userRoleSchema } from '../../shared/schemas.js';
+import { SESSION_TTL_MS } from '../../shared/constants.js';
 
 export interface TokenAuthAdapterOptions {
   secret: string;
@@ -25,7 +25,7 @@ export class TokenAuthAdapter implements AuthAdapter {
     this.secret = options.secret;
     this.storage = options.storage;
     this.baseUrl = options.baseUrl ?? 'http://localhost:4747';
-    this.sessionTtlMs = options.sessionTtlMs ?? SEVEN_DAYS_MS;
+    this.sessionTtlMs = options.sessionTtlMs ?? SESSION_TTL_MS;
   }
 
   // --- Token operations (existing behavior preserved) ---
@@ -76,7 +76,7 @@ export class TokenAuthAdapter implements AuthAdapter {
   ): Promise<InviteResult> {
     const token = this.generateToken(email);
     const tokenHash = this.hashToken(token);
-    const role = (options?.role ?? 'tester') as 'tester' | 'admin';
+    const role = userRoleSchema.parse(options?.role ?? 'tester');
     const base = options?.baseUrl ?? this.baseUrl;
 
     const user = await this.storage.createUser({
@@ -87,7 +87,7 @@ export class TokenAuthAdapter implements AuthAdapter {
       invitedBy,
     });
 
-    const inviteUrl = `${base}/join?token=${token}`;
+    const inviteUrl = `${base}/join?token=${encodeURIComponent(token)}`;
     return { user, token, inviteUrl };
   }
 
@@ -97,6 +97,26 @@ export class TokenAuthAdapter implements AuthAdapter {
 
   async listUsers(): Promise<User[]> {
     return this.storage.listUsers();
+  }
+
+  // --- Login ---
+
+  async loginWithToken(token: string): Promise<string> {
+    const validation = this.validateToken(token);
+    if (!validation.valid || !validation.email) {
+      throw new Error('Invalid or expired token');
+    }
+
+    const tokenHash = this.hashToken(token);
+    const user = await this.storage.getUserByTokenHash(tokenHash);
+    if (!user) {
+      throw new Error('Token not recognized');
+    }
+    if (user.revoked) {
+      throw new Error('User access has been revoked');
+    }
+
+    return this.createSession(user.email);
   }
 
   // --- Session operations ---
@@ -116,22 +136,21 @@ export class TokenAuthAdapter implements AuthAdapter {
   }
 
   async validateSession(sessionId: string): Promise<User | null> {
-    const session = await this.storage.getSession(sessionId);
-    if (!session) {
+    const result = await this.storage.getSessionWithUser(sessionId);
+    if (!result) {
       return null;
     }
 
-    if (new Date(session.expiresAt) <= new Date()) {
+    if (new Date(result.session.expiresAt) <= new Date()) {
       await this.storage.deleteSession(sessionId);
       return null;
     }
 
-    const user = await this.storage.getUserByEmail(session.userEmail);
-    if (!user || user.revoked) {
+    if (result.user.revoked) {
       return null;
     }
 
-    return user;
+    return result.user;
   }
 
   async destroySession(sessionId: string): Promise<void> {
