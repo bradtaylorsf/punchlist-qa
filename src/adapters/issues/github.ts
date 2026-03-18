@@ -6,6 +6,7 @@ import type {
   CreateQAFailureOpts,
   CreateSupportTicketOpts,
 } from './types.js';
+import { DEFAULT_LABELS } from '../../shared/constants.js';
 import type { LabelDef } from '../../shared/constants.js';
 
 export class GitHubIssueAdapter implements IssueAdapter {
@@ -55,7 +56,16 @@ export class GitHubIssueAdapter implements IssueAdapter {
   }
 
   async initialize(): Promise<void> {
-    throw new Error('Not implemented');
+    const res = await this.request(`/repos/${this.owner}/${this.repo}`, 'GET');
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        `GitHub authentication failed (${res.status}). Ensure PUNCHLIST_GITHUB_TOKEN has 'repo' scope.`
+      );
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to reach GitHub repo: ${res.status}`);
+    }
+    await this.addLabels(DEFAULT_LABELS);
   }
 
   async createQAFailureIssue(_opts: CreateQAFailureOpts): Promise<CreatedIssue> {
@@ -70,8 +80,17 @@ export class GitHubIssueAdapter implements IssueAdapter {
     throw new Error('Not implemented');
   }
 
-  async validateLabels(_labels: LabelDef[]): Promise<string[]> {
-    throw new Error('Not implemented');
+  async validateLabels(labels: LabelDef[]): Promise<string[]> {
+    const res = await this.request(
+      `/repos/${this.owner}/${this.repo}/labels?per_page=100`,
+      'GET'
+    );
+    if (!res.ok) {
+      throw new Error(`Failed to fetch labels: ${res.status}`);
+    }
+    const existing = (await res.json()) as Array<{ name: string }>;
+    const existingNames = new Set(existing.map((l) => l.name));
+    return labels.filter((l) => !existingNames.has(l.name)).map((l) => l.name);
   }
 
   async addLabels(labels: LabelDef[]): Promise<void> {
