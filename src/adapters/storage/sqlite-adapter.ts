@@ -1,13 +1,14 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import type { StorageAdapter } from './types.js';
 import { runMigrations } from './migrations.js';
 import type {
   Round,
   Result,
   User,
+  Session,
   CreateRoundInput,
   UpdateRoundInput,
   SubmitResultInput,
@@ -44,6 +45,13 @@ interface ResultRow {
   issue_number: number | null;
   created_at: string;
   updated_at: string;
+}
+
+interface SessionRow {
+  id: string;
+  user_email: string;
+  expires_at: string;
+  created_at: string;
 }
 
 interface UserRow {
@@ -85,6 +93,15 @@ function rowToResult(row: ResultRow): Result {
     issueNumber: row.issue_number,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function rowToSession(row: SessionRow): Session {
+  return {
+    id: row.id,
+    userEmail: row.user_email,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
   };
 }
 
@@ -272,6 +289,33 @@ export class SqliteAdapter implements StorageAdapter {
     this.getDb().prepare(
       'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)',
     ).run(key, value);
+  }
+
+  // --- Sessions ---
+
+  async createSession(userEmail: string, expiresAt: string): Promise<Session> {
+    const db = this.getDb();
+    const id = randomBytes(32).toString('hex');
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO sessions (id, user_email, expires_at, created_at)
+       VALUES (?, ?, ?, ?)`,
+    ).run(id, userEmail, expiresAt, now);
+    const row = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow;
+    return rowToSession(row);
+  }
+
+  async getSession(id: string): Promise<Session | null> {
+    const row = this.getDb().prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow | undefined;
+    return row ? rowToSession(row) : null;
+  }
+
+  async deleteSession(id: string): Promise<void> {
+    this.getDb().prepare('DELETE FROM sessions WHERE id = ?').run(id);
+  }
+
+  async deleteExpiredSessions(): Promise<void> {
+    this.getDb().prepare('DELETE FROM sessions WHERE expires_at < ?').run(new Date().toISOString());
   }
 
   // --- Internal ---
