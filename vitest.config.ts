@@ -5,6 +5,7 @@ export default defineConfig({
     globals: false,
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    environmentMatchGlobs: [['tests/widget/**', 'happy-dom']],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
