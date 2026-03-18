@@ -1,6 +1,7 @@
 import type { AuthAdapter } from './types.js';
 import type { User } from '../../shared/types.js';
 import { SESSION_TTL_MS } from '../../shared/constants.js';
+import { RevokedUserError } from './errors.js';
 
 export interface SessionCookieOptions {
   name?: string;
@@ -39,7 +40,11 @@ export function parseCookie(header: string | undefined, name: string): string | 
 /**
  * Build a Set-Cookie header value.
  */
-export function buildSetCookie(name: string, value: string, options?: SessionCookieOptions): string {
+export function buildSetCookie(
+  name: string,
+  value: string,
+  options?: SessionCookieOptions,
+): string {
   const opts = resolveOptions(options);
   const parts = [
     `${name}=${value}`,
@@ -80,15 +85,15 @@ export async function handleLogin(
   token: string,
   options?: SessionCookieOptions,
 ): Promise<{ sessionId: string; cookie: string } | { error: string; status: number }> {
-  const opts = resolveOptions(options);
+  const { name } = resolveOptions(options);
 
   try {
     const sessionId = await auth.loginWithToken(token);
-    const cookie = buildSetCookie(opts.name, sessionId, options);
+    const cookie = buildSetCookie(name, sessionId, options);
     return { sessionId, cookie };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Login failed';
-    const status = message.includes('Invalid') || message.includes('not recognized') ? 401 : 403;
+    const status = err instanceof RevokedUserError ? 403 : 401;
     return { error: message, status };
   }
 }
@@ -101,9 +106,9 @@ export async function handleLogout(
   sessionId: string,
   options?: SessionCookieOptions,
 ): Promise<{ cookie: string }> {
-  const opts = resolveOptions(options);
+  const { name } = resolveOptions(options);
   await auth.destroySession(sessionId);
-  const cookie = buildClearCookie(opts.name, options);
+  const cookie = buildClearCookie(name, options);
   return { cookie };
 }
 
@@ -115,8 +120,8 @@ export async function authenticateRequest(
   cookieHeader: string | undefined,
   options?: SessionCookieOptions,
 ): Promise<User | null> {
-  const opts = resolveOptions(options);
-  const sessionId = parseCookie(cookieHeader, opts.name);
+  const { name } = resolveOptions(options);
+  const sessionId = parseCookie(cookieHeader, name);
   if (!sessionId) {
     return null;
   }

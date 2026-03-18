@@ -1,7 +1,12 @@
 import { punchlistConfigSchema } from './schemas.js';
 import type { PunchlistConfig } from './schemas.js';
 
-export type ConfigFetcherErrorCode = 'NOT_FOUND' | 'RATE_LIMITED' | 'INVALID_CONFIG' | 'NETWORK_ERROR';
+export type ConfigFetcherErrorCode =
+  | 'NOT_FOUND'
+  | 'RATE_LIMITED'
+  | 'ACCESS_DENIED'
+  | 'INVALID_CONFIG'
+  | 'NETWORK_ERROR';
 
 export class ConfigFetcherError extends Error {
   readonly code: ConfigFetcherErrorCode;
@@ -58,8 +63,8 @@ export class ConfigFetcher {
     try {
       res = await fetch(url, {
         headers: {
-          'Authorization': `Bearer ${this.token}`,
-          'Accept': 'application/vnd.github+json',
+          Authorization: `Bearer ${this.token}`,
+          Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
         },
       });
@@ -77,13 +82,25 @@ export class ConfigFetcher {
       );
     }
 
-    // Note: 403 can also indicate insufficient token permissions, but we treat
-    // it as rate-limited since that's the most common 403 cause with the GitHub API.
-    // Callers can inspect the error message for more context.
-    if (res.status === 403 || res.status === 429) {
+    if (res.status === 429) {
       throw new ConfigFetcherError(
-        `GitHub API rate limit or access denied (${res.status})`,
+        `GitHub API rate limit exceeded (${res.status})`,
         'RATE_LIMITED',
+      );
+    }
+
+    if (res.status === 403) {
+      // Distinguish rate-limited (x-ratelimit-remaining === "0") from access denied.
+      const rateLimitRemaining = res.headers.get('x-ratelimit-remaining');
+      if (rateLimitRemaining === '0') {
+        throw new ConfigFetcherError(
+          `GitHub API rate limit exceeded (403, x-ratelimit-remaining=0)`,
+          'RATE_LIMITED',
+        );
+      }
+      throw new ConfigFetcherError(
+        `GitHub API access denied (403) — check token permissions`,
+        'ACCESS_DENIED',
       );
     }
 
@@ -96,7 +113,7 @@ export class ConfigFetcher {
 
     let body: { content?: string };
     try {
-      body = await res.json() as { content?: string };
+      body = (await res.json()) as { content?: string };
     } catch {
       throw new ConfigFetcherError('Invalid JSON response from GitHub API', 'INVALID_CONFIG');
     }
@@ -115,7 +132,7 @@ export class ConfigFetcher {
 
     const result = punchlistConfigSchema.safeParse(rawConfig);
     if (!result.success) {
-      const errors = result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
+      const errors = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
       throw new ConfigFetcherError(`Invalid config: ${errors}`, 'INVALID_CONFIG');
     }
 

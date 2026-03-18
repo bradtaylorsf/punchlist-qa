@@ -17,12 +17,17 @@ function encodeConfig(obj: unknown): string {
   return Buffer.from(JSON.stringify(obj)).toString('base64');
 }
 
-function mockFetchResponse(status: number, body?: unknown): Response {
+function mockFetchResponse(
+  status: number,
+  body?: unknown,
+  headers: Record<string, string> = {},
+): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
     statusText: status === 200 ? 'OK' : status === 404 ? 'Not Found' : 'Error',
     json: () => Promise.resolve(body),
+    headers: new Headers(headers),
   } as Response;
 }
 
@@ -40,9 +45,10 @@ describe('ConfigFetcher', () => {
   });
 
   it('should fetch and parse a valid config', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      mockFetchResponse(200, { content: encodeConfig(validConfig) }),
-    ));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(mockFetchResponse(200, { content: encodeConfig(validConfig) })),
+    );
 
     const fetcher = new ConfigFetcher(opts);
     const config = await fetcher.fetch();
@@ -51,9 +57,9 @@ describe('ConfigFetcher', () => {
   });
 
   it('should return cached config within TTL', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
-      mockFetchResponse(200, { content: encodeConfig(validConfig) }),
-    );
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(mockFetchResponse(200, { content: encodeConfig(validConfig) }));
     vi.stubGlobal('fetch', mockFetch);
 
     const fetcher = new ConfigFetcher(opts);
@@ -63,9 +69,9 @@ describe('ConfigFetcher', () => {
   });
 
   it('should refetch after TTL expires', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
-      mockFetchResponse(200, { content: encodeConfig(validConfig) }),
-    );
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(mockFetchResponse(200, { content: encodeConfig(validConfig) }));
     vi.stubGlobal('fetch', mockFetch);
 
     const fetcher = new ConfigFetcher(opts);
@@ -76,9 +82,9 @@ describe('ConfigFetcher', () => {
   });
 
   it('should bypass cache with force=true', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
-      mockFetchResponse(200, { content: encodeConfig(validConfig) }),
-    );
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(mockFetchResponse(200, { content: encodeConfig(validConfig) }));
     vi.stubGlobal('fetch', mockFetch);
 
     const fetcher = new ConfigFetcher(opts);
@@ -95,8 +101,20 @@ describe('ConfigFetcher', () => {
     await expect(fetcher.fetch()).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
-  it('should throw RATE_LIMITED for 403', async () => {
+  it('should throw ACCESS_DENIED for 403 without rate-limit header', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockFetchResponse(403)));
+
+    const fetcher = new ConfigFetcher(opts);
+    await expect(fetcher.fetch()).rejects.toMatchObject({ code: 'ACCESS_DENIED' });
+  });
+
+  it('should throw RATE_LIMITED for 403 with x-ratelimit-remaining: 0', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(mockFetchResponse(403, undefined, { 'x-ratelimit-remaining': '0' })),
+    );
 
     const fetcher = new ConfigFetcher(opts);
     await expect(fetcher.fetch()).rejects.toMatchObject({ code: 'RATE_LIMITED' });
@@ -117,12 +135,15 @@ describe('ConfigFetcher', () => {
   });
 
   it('should throw INVALID_CONFIG for invalid JSON response', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      json: () => Promise.reject(new Error('bad json')),
-    } as unknown as Response));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () => Promise.reject(new Error('bad json')),
+      } as unknown as Response),
+    );
 
     const fetcher = new ConfigFetcher(opts);
     await expect(fetcher.fetch()).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
@@ -130,18 +151,17 @@ describe('ConfigFetcher', () => {
 
   it('should throw INVALID_CONFIG when schema validation fails', async () => {
     const badConfig = { projectName: '' }; // Missing required fields
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      mockFetchResponse(200, { content: encodeConfig(badConfig) }),
-    ));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(mockFetchResponse(200, { content: encodeConfig(badConfig) })),
+    );
 
     const fetcher = new ConfigFetcher(opts);
     await expect(fetcher.fetch()).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
   });
 
   it('should throw INVALID_CONFIG when content is missing', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      mockFetchResponse(200, {}),
-    ));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockFetchResponse(200, {})));
 
     const fetcher = new ConfigFetcher(opts);
     await expect(fetcher.fetch()).rejects.toMatchObject({ code: 'INVALID_CONFIG' });
@@ -154,9 +174,10 @@ describe('ConfigFetcher', () => {
     });
 
     it('should return cached config within TTL', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-        mockFetchResponse(200, { content: encodeConfig(validConfig) }),
-      ));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(mockFetchResponse(200, { content: encodeConfig(validConfig) })),
+      );
 
       const fetcher = new ConfigFetcher(opts);
       await fetcher.fetch();
@@ -165,9 +186,10 @@ describe('ConfigFetcher', () => {
     });
 
     it('should return null after TTL expires', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-        mockFetchResponse(200, { content: encodeConfig(validConfig) }),
-      ));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(mockFetchResponse(200, { content: encodeConfig(validConfig) })),
+      );
 
       const fetcher = new ConfigFetcher(opts);
       await fetcher.fetch();
@@ -178,9 +200,10 @@ describe('ConfigFetcher', () => {
 
   describe('invalidate', () => {
     it('should clear the cache', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-        mockFetchResponse(200, { content: encodeConfig(validConfig) }),
-      ));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(mockFetchResponse(200, { content: encodeConfig(validConfig) })),
+      );
 
       const fetcher = new ConfigFetcher(opts);
       await fetcher.fetch();

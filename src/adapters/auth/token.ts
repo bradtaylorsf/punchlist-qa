@@ -4,6 +4,7 @@ import type { StorageAdapter } from '../storage/types.js';
 import type { User } from '../../shared/types.js';
 import { userRoleSchema } from '../../shared/schemas.js';
 import { SESSION_TTL_MS } from '../../shared/constants.js';
+import { InvalidTokenError, UnrecognizedTokenError, RevokedUserError } from './errors.js';
 
 export interface TokenAuthAdapterOptions {
   secret: string;
@@ -104,19 +105,20 @@ export class TokenAuthAdapter implements AuthAdapter {
   async loginWithToken(token: string): Promise<string> {
     const validation = this.validateToken(token);
     if (!validation.valid || !validation.email) {
-      throw new Error('Invalid or expired token');
+      throw new InvalidTokenError();
     }
 
     const tokenHash = this.hashToken(token);
     const user = await this.storage.getUserByTokenHash(tokenHash);
     if (!user) {
-      throw new Error('Token not recognized');
+      throw new UnrecognizedTokenError();
     }
     if (user.revoked) {
-      throw new Error('User access has been revoked');
+      throw new RevokedUserError();
     }
 
-    return this.createSession(user.email);
+    // Pass the already-fetched user to avoid a redundant storage lookup.
+    return this.createSessionForUser(user);
   }
 
   // --- Session operations ---
@@ -127,11 +129,19 @@ export class TokenAuthAdapter implements AuthAdapter {
       throw new Error('User not found');
     }
     if (user.revoked) {
-      throw new Error('User access has been revoked');
+      throw new RevokedUserError();
     }
 
+    return this.createSessionForUser(user);
+  }
+
+  /**
+   * Internal: create a session directly from a known User object, skipping the
+   * storage lookup that `createSession` would perform.
+   */
+  private async createSessionForUser(user: User): Promise<string> {
     const expiresAt = new Date(Date.now() + this.sessionTtlMs).toISOString();
-    const session = await this.storage.createSession(email, expiresAt);
+    const session = await this.storage.createSession(user.email, expiresAt);
     return session.id;
   }
 
