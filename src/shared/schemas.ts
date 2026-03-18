@@ -11,6 +11,9 @@ export const widgetPositionSchema = z.enum(['bottom-right', 'bottom-left', 'top-
 export const widgetThemeSchema = z.enum(['light', 'dark']);
 export const testResultStatusSchema = z.enum(['pass', 'fail', 'skip', 'blocked']);
 export const testCasePrioritySchema = z.enum(['high', 'medium', 'low']);
+export const roundStatusSchema = z.enum(['active', 'completed', 'archived']);
+export const resultSeveritySchema = z.enum(['minor', 'broken', 'blocker']);
+export const userRoleSchema = z.enum(['tester', 'admin']);
 
 // --- Sub-schemas ---
 
@@ -70,6 +73,78 @@ export const testerSchema = z.object({
   token: z.string(),
   createdAt: z.string(),
   revokedAt: z.string().optional(),
+});
+
+// --- Storage domain schemas (DB models, distinct from config-file schemas) ---
+
+export const roundSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  status: roundStatusSchema,
+  createdByEmail: z.string().email(),
+  createdByName: z.string(),
+  createdAt: z.string(),
+  completedAt: z.string().nullable(),
+});
+
+export const resultSchema = z.object({
+  id: z.string().uuid(),
+  roundId: z.string().uuid(),
+  testId: z.string(),
+  status: testResultStatusSchema,
+  testerName: z.string(),
+  testerEmail: z.string().email(),
+  description: z.string().nullable(),
+  severity: resultSeveritySchema.nullable(),
+  commitHash: z.string().nullable(),
+  issueUrl: z.string().nullable(),
+  issueNumber: z.number().int().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const userSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  name: z.string(),
+  tokenHash: z.string(),
+  role: userRoleSchema,
+  invitedBy: z.string().email(),
+  revoked: z.boolean(),
+  createdAt: z.string(),
+});
+
+export const createRoundInputSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  createdByEmail: z.string().email(),
+  createdByName: z.string().min(1),
+});
+
+export const updateRoundInputSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  status: roundStatusSchema.optional(),
+  completedAt: z.string().nullable().optional(),
+});
+
+export const submitResultInputSchema = z.object({
+  testId: z.string().min(1),
+  status: testResultStatusSchema,
+  testerName: z.string().min(1),
+  testerEmail: z.string().email(),
+  description: z.string().optional(),
+  severity: resultSeveritySchema.optional(),
+  commitHash: z.string().optional(),
+});
+
+export const createUserInputSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1),
+  tokenHash: z.string().min(1),
+  role: userRoleSchema.default('tester'),
+  invitedBy: z.string().email(),
 });
 
 // --- Main config schema ---
@@ -158,3 +233,13 @@ export type AuthAdapterType = z.infer<typeof authAdapterTypeSchema>;
 export type AIToolChoice = z.infer<typeof aiToolChoiceSchema>;
 export type Category = z.infer<typeof categorySchema>;
 export type TestCasePriority = z.infer<typeof testCasePrioritySchema>;
+export type Round = z.infer<typeof roundSchema>;
+export type Result = z.infer<typeof resultSchema>;
+export type User = z.infer<typeof userSchema>;
+export type RoundStatus = z.infer<typeof roundStatusSchema>;
+export type ResultSeverity = z.infer<typeof resultSeveritySchema>;
+export type UserRole = z.infer<typeof userRoleSchema>;
+export type CreateRoundInput = z.infer<typeof createRoundInputSchema>;
+export type UpdateRoundInput = z.infer<typeof updateRoundInputSchema>;
+export type SubmitResultInput = z.infer<typeof submitResultInputSchema>;
+export type CreateUserInput = z.infer<typeof createUserInputSchema>;
