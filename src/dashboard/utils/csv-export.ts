@@ -1,6 +1,23 @@
-import type { TestCase, Category, Result } from '../../shared/schemas';
+interface CSVTestCase {
+  id: string;
+  title: string;
+  category: string;
+}
 
-type CSVResult = Pick<Result, 'testId' | 'status' | 'testerName' | 'commitHash' | 'severity' | 'description' | 'issueUrl'>;
+interface CSVCategory {
+  id: string;
+  label: string;
+}
+
+interface CSVResult {
+  testId: string;
+  status: string;
+  testerName: string;
+  commitHash: string | null;
+  severity: string | null;
+  description: string | null;
+  issueUrl: string | null;
+}
 
 export function escapeCSV(value: string): string {
   if (value.includes('"') || value.includes(',') || value.includes('\n') || value.includes('\r')) {
@@ -14,9 +31,9 @@ function sanitizeFilename(name: string): string {
 }
 
 export function buildCSV(
-  testCases: TestCase[],
+  testCases: CSVTestCase[],
   results: Map<string, CSVResult>,
-  categories: Category[],
+  categories: CSVCategory[],
 ): string {
   const categoryMap = new Map(categories.map((c) => [c.id, c.label]));
 
@@ -52,9 +69,9 @@ export function buildCSV(
 
 export function exportRoundCSV(
   roundName: string,
-  testCases: TestCase[],
+  testCases: CSVTestCase[],
   results: Map<string, CSVResult>,
-  categories: Category[],
+  categories: CSVCategory[],
 ): void {
   const csv = buildCSV(testCases, results, categories);
   const date = new Date().toISOString().slice(0, 10);
