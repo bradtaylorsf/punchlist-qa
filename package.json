@@ -38,6 +38,7 @@
     "build:dashboard": "vite build --config src/dashboard/vite.config.ts",
     "dev": "tsc --watch",
     "dev:dashboard": "vite --config src/dashboard/vite.config.ts",
+    "demo": "node scripts/demo.mjs",
     "cli": "node bin/punchlist.mjs",
     "start": "node bin/punchlist.mjs",
     "test": "vitest run",

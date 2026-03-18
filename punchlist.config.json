@@ -15,10 +15,354 @@
     "position": "bottom-right",
     "theme": "light",
     "corsDomains": [
-      "http://localhost:3000"
-    ]
+      "http://localhost:4747",
+      "http://localhost:5173"
+    ],
+    "categories": ["bug", "ux", "feature-request"]
   },
   "aiTool": "claude-code",
-  "testCases": [],
+  "categories": [
+    {
+      "id": "auth",
+      "label": "Authentication",
+      "description": "Login, logout, session management, invite tokens"
+    },
+    {
+      "id": "dash",
+      "label": "Dashboard UI",
+      "description": "Navigation, layout, login page, user display"
+    },
+    {
+      "id": "rounds",
+      "label": "Test Rounds",
+      "description": "Creating, listing, updating, and completing rounds"
+    },
+    {
+      "id": "results",
+      "label": "Test Results",
+      "description": "Submitting pass/fail/skip/blocked results, undo, severity"
+    },
+    {
+      "id": "widget",
+      "label": "Support Widget",
+      "description": "Widget loading, form submission, context capture, variants"
+    },
+    {
+      "id": "api",
+      "label": "API Endpoints",
+      "description": "Config, issues, commit, users API routes"
+    },
+    {
+      "id": "cli",
+      "label": "CLI Commands",
+      "description": "Init, serve, invite, revoke, users commands"
+    }
+  ],
+  "testCases": [
+    {
+      "id": "auth-001",
+      "title": "Login with valid invite token",
+      "category": "auth",
+      "priority": "high",
+      "instructions": "Open http://localhost:4747. Paste the invite token into the login field and click Sign In.",
+      "expectedResult": "Login succeeds, dashboard loads with your name in the nav bar, session cookie is set."
+    },
+    {
+      "id": "auth-002",
+      "title": "Login rejects invalid token",
+      "category": "auth",
+      "priority": "high",
+      "instructions": "Open http://localhost:4747. Enter 'bad-token-12345' and click Sign In.",
+      "expectedResult": "Error message appears below the input field. No session cookie set."
+    },
+    {
+      "id": "auth-003",
+      "title": "Login rejects revoked user token",
+      "category": "auth",
+      "priority": "medium",
+      "instructions": "Use CLI to invite a user, revoke them, then try logging in with their token.",
+      "expectedResult": "403 error shown. User cannot access the dashboard."
+    },
+    {
+      "id": "auth-004",
+      "title": "Logout clears session",
+      "category": "auth",
+      "priority": "high",
+      "instructions": "While logged in, click the Logout button in the top-right nav.",
+      "expectedResult": "Redirected to login page. Refreshing the page still shows login. Session cookie cleared."
+    },
+    {
+      "id": "auth-005",
+      "title": "Protected routes require authentication",
+      "category": "auth",
+      "priority": "high",
+      "instructions": "Clear cookies, then directly visit http://localhost:4747/api/config in the browser.",
+      "expectedResult": "Returns 401 JSON: {success: false, error: 'Authentication required'}."
+    },
+    {
+      "id": "auth-006",
+      "title": "Token input field masks the token",
+      "category": "auth",
+      "priority": "low",
+      "instructions": "Open login page and type into the token field. Inspect the input element.",
+      "expectedResult": "Input is type=password. Characters are masked (dots/bullets), not visible as plaintext."
+    },
+    {
+      "id": "dash-001",
+      "title": "Dashboard loads when authenticated",
+      "category": "dash",
+      "priority": "high",
+      "instructions": "Login with valid token. Wait for the page to fully load.",
+      "expectedResult": "Nav bar shows 'Punchlist QA' title, 'Testing' and 'History' links, your name, and Logout button."
+    },
+    {
+      "id": "dash-002",
+      "title": "Navigation between Testing and History pages",
+      "category": "dash",
+      "priority": "high",
+      "instructions": "Click 'History' in the nav bar, then click 'Testing' to go back.",
+      "expectedResult": "History page loads at /history. Testing page loads at /. Active nav link is highlighted in blue."
+    },
+    {
+      "id": "dash-003",
+      "title": "SPA fallback serves index.html for unknown routes",
+      "category": "dash",
+      "priority": "medium",
+      "instructions": "While logged in, navigate to http://localhost:4747/nonexistent-page.",
+      "expectedResult": "Dashboard loads (not a 404 page). React Router redirects to the Testing page."
+    },
+    {
+      "id": "dash-004",
+      "title": "Support widget visible on dashboard",
+      "category": "dash",
+      "priority": "medium",
+      "instructions": "Login to the dashboard. Look at the bottom-right corner of the page.",
+      "expectedResult": "Purple support widget FAB button is visible. Clicking it opens the support form."
+    },
+    {
+      "id": "dash-005",
+      "title": "User name displayed in header",
+      "category": "dash",
+      "priority": "low",
+      "instructions": "Login and check the right side of the nav bar.",
+      "expectedResult": "Your display name (from the invite) is shown next to the Logout button."
+    },
+    {
+      "id": "rounds-001",
+      "title": "Create a new test round via API",
+      "category": "rounds",
+      "priority": "high",
+      "instructions": "Using curl or browser console, POST to /api/rounds with {name: 'Sprint 1 QA'} (auth cookie required).",
+      "expectedResult": "201 response with round object containing UUID id, name, status='active', your email as createdByEmail."
+    },
+    {
+      "id": "rounds-002",
+      "title": "List all test rounds",
+      "category": "rounds",
+      "priority": "high",
+      "instructions": "Create 2+ rounds, then GET /api/rounds.",
+      "expectedResult": "200 response with array of all rounds, newest first."
+    },
+    {
+      "id": "rounds-003",
+      "title": "Update round name and description",
+      "category": "rounds",
+      "priority": "medium",
+      "instructions": "Create a round, then PUT /api/rounds/:id with {name: 'Updated Name', description: 'New desc'}.",
+      "expectedResult": "200 response with updated round. Name and description changed, other fields preserved."
+    },
+    {
+      "id": "rounds-004",
+      "title": "Complete a round",
+      "category": "rounds",
+      "priority": "medium",
+      "instructions": "Create a round, then PUT /api/rounds/:id with {status: 'completed', completedAt: '2026-03-17T00:00:00Z'}.",
+      "expectedResult": "Round status changes to 'completed' with the completedAt timestamp."
+    },
+    {
+      "id": "rounds-005",
+      "title": "Round creation uses session identity",
+      "category": "rounds",
+      "priority": "high",
+      "instructions": "POST /api/rounds with {name: 'Test', createdByEmail: 'fake@hacker.com', createdByName: 'Hacker'}.",
+      "expectedResult": "Round is created but createdByEmail and createdByName are from the session, not the request body."
+    },
+    {
+      "id": "results-001",
+      "title": "Submit a passing test result",
+      "category": "results",
+      "priority": "high",
+      "instructions": "Create a round, then POST /api/rounds/:roundId/results with {testId: 'auth-001', status: 'pass', testerName: 'x', testerEmail: 'x@x.com'}.",
+      "expectedResult": "201 response with result object. testerName and testerEmail from session, not body."
+    },
+    {
+      "id": "results-002",
+      "title": "Submit a failing result with severity",
+      "category": "results",
+      "priority": "high",
+      "instructions": "POST result with {testId: 'auth-002', status: 'fail', severity: 'blocker', description: 'Login crashes'}.",
+      "expectedResult": "201 response. Result includes severity='blocker' and description."
+    },
+    {
+      "id": "results-003",
+      "title": "Submit skip and blocked results",
+      "category": "results",
+      "priority": "medium",
+      "instructions": "Submit two results: one with status='skip', one with status='blocked'.",
+      "expectedResult": "Both accepted with 201. Each result has correct status stored."
+    },
+    {
+      "id": "results-004",
+      "title": "Delete (undo) a test result",
+      "category": "results",
+      "priority": "high",
+      "instructions": "Submit a result for auth-001, then DELETE /api/rounds/:roundId/results/auth-001.",
+      "expectedResult": "200 response with deleted=1. GET results no longer includes auth-001."
+    },
+    {
+      "id": "results-005",
+      "title": "List results for a round",
+      "category": "results",
+      "priority": "high",
+      "instructions": "Submit 3 results to a round, then GET /api/rounds/:roundId/results.",
+      "expectedResult": "200 response with array of all 3 results for the round."
+    },
+    {
+      "id": "widget-001",
+      "title": "Widget script loads from server",
+      "category": "widget",
+      "priority": "high",
+      "instructions": "Visit http://localhost:4747/widget.js in browser.",
+      "expectedResult": "JavaScript file loads with PunchlistWidget global. No errors in console."
+    },
+    {
+      "id": "widget-002",
+      "title": "Widget FAB opens and closes",
+      "category": "widget",
+      "priority": "high",
+      "instructions": "On a page with the widget, click the FAB (bottom-right). Then click the X or click outside.",
+      "expectedResult": "Form overlay opens on click, closes on X. FAB reappears when form closes."
+    },
+    {
+      "id": "widget-003",
+      "title": "Submit support ticket via widget",
+      "category": "widget",
+      "priority": "high",
+      "instructions": "Open widget, fill in subject='Test Bug', select category, add description, submit.",
+      "expectedResult": "Success message shown with GitHub issue link. Issue created in repo with correct labels."
+    },
+    {
+      "id": "widget-004",
+      "title": "Widget captures browser context",
+      "category": "widget",
+      "priority": "medium",
+      "instructions": "Submit a support ticket, then check the created GitHub issue body.",
+      "expectedResult": "Issue body includes userAgent, pageUrl, screenSize, viewport, timestamp, timezone."
+    },
+    {
+      "id": "widget-005",
+      "title": "Widget uses shadow DOM for style isolation",
+      "category": "widget",
+      "priority": "medium",
+      "instructions": "Inspect the widget element in DevTools. Check for shadowRoot.",
+      "expectedResult": "Widget is inside a shadow DOM. Parent page styles do not affect widget appearance."
+    },
+    {
+      "id": "widget-006",
+      "title": "Widget handles submission failure gracefully",
+      "category": "widget",
+      "priority": "medium",
+      "instructions": "Stop the server, try submitting a support ticket.",
+      "expectedResult": "Error message shown: 'Something went wrong'. Form values preserved. Try Again button works."
+    },
+    {
+      "id": "api-001",
+      "title": "GET /api/config returns project config",
+      "category": "api",
+      "priority": "high",
+      "instructions": "Authenticated, GET /api/config.",
+      "expectedResult": "200 response with projectName, testCases array, and categories array."
+    },
+    {
+      "id": "api-002",
+      "title": "GET /api/commit returns latest SHA",
+      "category": "api",
+      "priority": "medium",
+      "instructions": "Authenticated, GET /api/commit.",
+      "expectedResult": "200 response with sha field containing a git commit hash string."
+    },
+    {
+      "id": "api-003",
+      "title": "GET /api/users/me returns safe user info",
+      "category": "api",
+      "priority": "high",
+      "instructions": "Authenticated, GET /api/users/me. Inspect the response JSON.",
+      "expectedResult": "Response contains id, email, name, role. Does NOT contain tokenHash, invitedBy, or revoked."
+    },
+    {
+      "id": "api-004",
+      "title": "POST /api/issues creates GitHub issue for test failure",
+      "category": "api",
+      "priority": "high",
+      "instructions": "POST /api/issues with full createQAFailureOpts payload (testId, testTitle, category, severity, description, testerName, testerEmail).",
+      "expectedResult": "201 response with issue url and number. GitHub issue created with punchlist + qa:fail labels."
+    },
+    {
+      "id": "api-005",
+      "title": "GET /api/issues/open/:testId checks for existing issues",
+      "category": "api",
+      "priority": "medium",
+      "instructions": "Create a QA failure issue for auth-001, then GET /api/issues/open/auth-001.",
+      "expectedResult": "Returns the open issue with url, number, and title. Returns null data for test IDs with no issues."
+    },
+    {
+      "id": "api-006",
+      "title": "Validation errors return structured 400 response",
+      "category": "api",
+      "priority": "medium",
+      "instructions": "POST /api/rounds with empty body {}.",
+      "expectedResult": "400 response with {success: false, error: 'Validation error', details: [{path, message}]}."
+    },
+    {
+      "id": "cli-001",
+      "title": "Init creates config in current directory",
+      "category": "cli",
+      "priority": "high",
+      "instructions": "In a new directory with a git repo, run 'pnpm cli init'. Follow the prompts.",
+      "expectedResult": "punchlist.config.json and .env created. Config has correct repo, storage, and auth sections."
+    },
+    {
+      "id": "cli-002",
+      "title": "Serve starts with all adapters",
+      "category": "cli",
+      "priority": "high",
+      "instructions": "Ensure .env has both tokens. Run 'pnpm cli serve'.",
+      "expectedResult": "Server starts on 4747. Logs show project name, port, CORS domains, dashboard URL, widget URL, API URL."
+    },
+    {
+      "id": "cli-003",
+      "title": "Invite creates user with token",
+      "category": "cli",
+      "priority": "high",
+      "instructions": "Run 'pnpm cli invite --email test@demo.com --name \"Demo Tester\"'.",
+      "expectedResult": "Invite token printed. User visible in 'pnpm cli users' output."
+    },
+    {
+      "id": "cli-004",
+      "title": "Revoke disables user access",
+      "category": "cli",
+      "priority": "medium",
+      "instructions": "Invite a user, then run 'pnpm cli revoke --email test@demo.com'.",
+      "expectedResult": "User status changes to revoked. Login with that token fails with 403."
+    },
+    {
+      "id": "cli-005",
+      "title": "Users command lists all testers",
+      "category": "cli",
+      "priority": "low",
+      "instructions": "After creating multiple users, run 'pnpm cli users'.",
+      "expectedResult": "Table showing all users with email, name, role, and active/revoked status."
+    }
+  ],
   "testers": []
 }

@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useWidget } from '../hooks/useWidget';
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
+  useWidget(user);
 
   return (
     <div className="min-h-screen bg-gray-50">
