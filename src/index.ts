@@ -16,6 +16,7 @@ export {
   updateRoundInputSchema,
   submitResultInputSchema,
   createUserInputSchema,
+  sessionSchema,
 } from './shared/schemas.js';
 export { ConfigFetcher, ConfigFetcherError } from './shared/config-fetcher.js';
 export type { ConfigFetcherOpts } from './shared/config-fetcher.js';
@@ -37,6 +38,7 @@ export type {
   UpdateRoundInput,
   SubmitResultInput,
   CreateUserInput,
+  Session,
 } from './shared/types.js';
 export { SqliteAdapter } from './adapters/storage/index.js';
 export type { StorageAdapter } from './adapters/storage/types.js';

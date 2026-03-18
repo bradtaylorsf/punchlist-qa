@@ -1,5 +1,7 @@
 export const DEFAULT_PORT = 4747;
 
+export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 export const CONFIG_FILENAME = 'punchlist.config.json';
 
 export interface LabelDef {

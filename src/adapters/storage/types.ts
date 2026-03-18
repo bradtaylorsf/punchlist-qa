@@ -2,6 +2,7 @@ import type {
   Round,
   Result,
   User,
+  Session,
   CreateRoundInput,
   UpdateRoundInput,
   SubmitResultInput,
@@ -70,4 +71,21 @@ export interface StorageAdapter {
 
   /** Set a config value (insert or update) */
   setConfig(key: string, value: string): Promise<void>;
+
+  // --- Sessions ---
+
+  /** Create a new session */
+  createSession(userEmail: string, expiresAt: string): Promise<Session>;
+
+  /** Get a session by ID, or null if not found */
+  getSession(id: string): Promise<Session | null>;
+
+  /** Get a session with its associated user in a single query, or null if not found */
+  getSessionWithUser(id: string): Promise<{ session: Session; user: User } | null>;
+
+  /** Delete a session by ID */
+  deleteSession(id: string): Promise<void>;
+
+  /** Delete all expired sessions */
+  deleteExpiredSessions(): Promise<void>;
 }

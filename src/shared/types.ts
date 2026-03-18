@@ -27,4 +27,5 @@ export type {
   UpdateRoundInput,
   SubmitResultInput,
   CreateUserInput,
+  Session,
 } from './schemas.js';
