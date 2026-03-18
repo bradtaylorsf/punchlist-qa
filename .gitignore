@@ -3,6 +3,9 @@ dist/
 .env
 .env.local
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
 *.sqlite
 .punchlist/
 .DS_Store

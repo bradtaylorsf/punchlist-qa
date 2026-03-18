@@ -6,7 +6,7 @@
   },
   "storage": {
     "type": "sqlite",
-    "path": "./punchlist.db"
+    "path": ".punchlist/punchlist.db"
   },
   "auth": {
     "type": "token"

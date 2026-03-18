@@ -19,7 +19,7 @@ export const DEFAULT_LABELS: LabelDef[] = [
 ];
 
 export const DEFAULT_CONFIG = {
-  storage: { type: 'sqlite' as const, path: './punchlist.db' },
+  storage: { type: 'sqlite' as const, path: '.punchlist/punchlist.db' },
   widget: {
     position: 'bottom-right' as const,
     theme: 'light' as const,
