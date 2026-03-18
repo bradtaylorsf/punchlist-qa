@@ -7,7 +7,12 @@ export const issueTrackerTypeSchema = z.enum(['github', 'jira', 'linear']);
 export const storageAdapterTypeSchema = z.enum(['sqlite', 'dynamodb', 'file']);
 export const authAdapterTypeSchema = z.enum(['token', 'auth0']);
 export const aiToolChoiceSchema = z.enum(['claude-code', 'codex', 'none']);
-export const widgetPositionSchema = z.enum(['bottom-right', 'bottom-left', 'top-right', 'top-left']);
+export const widgetPositionSchema = z.enum([
+  'bottom-right',
+  'bottom-left',
+  'top-right',
+  'top-left',
+]);
 export const widgetThemeSchema = z.enum(['light', 'dark']);
 export const testResultStatusSchema = z.enum(['pass', 'fail', 'skip', 'blocked']);
 export const testCasePrioritySchema = z.enum(['high', 'medium', 'low']);
@@ -45,12 +50,17 @@ export const categorySchema = z.object({
 });
 
 export const testCaseSchema = z.object({
-  id: z.string().regex(/^[a-z][a-z0-9-]*-\d{3}$/, 'Test case ID must match pattern: prefix-NNN (e.g. auth-001, user-auth-001)'),
+  id: z
+    .string()
+    .regex(
+      /^[a-z][a-z0-9-]*-\d{3}$/,
+      'Test case ID must match pattern: prefix-NNN (e.g. auth-001, user-auth-001)',
+    ),
   title: z.string().min(1),
   category: z.string().min(1),
   priority: testCasePrioritySchema,
   instructions: z.string().min(1),
-  expectedResult: z.string(),
+  expectedResult: z.string().min(1),
 });
 
 export const testResultSchema = z.object({
@@ -156,7 +166,9 @@ export const openIssueSchema = z.object({
 });
 
 export const createQAFailureOptsSchema = z.object({
-  testId: z.string().regex(/^[a-z][a-z0-9-]*-\d{3}$/, 'testId must match pattern: prefix-NNN (e.g. auth-001)'),
+  testId: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]*-\d{3}$/, 'testId must match pattern: prefix-NNN (e.g. auth-001)'),
   testTitle: z.string().min(1),
   category: z.string().min(1),
   severity: resultSeveritySchema,
@@ -180,6 +192,14 @@ export const createSupportTicketOptsSchema = z.object({
   customContext: z.record(z.string(), z.string()).optional(),
 });
 
+// --- Label schema ---
+
+export const labelDefSchema = z.object({
+  name: z.string().min(1),
+  color: z.string().min(1),
+  description: z.string(),
+});
+
 // --- Session schema ---
 
 export const sessionSchema = z.object({
@@ -191,72 +211,74 @@ export const sessionSchema = z.object({
 
 // --- Main config schema ---
 
-export const punchlistConfigSchema = z.object({
-  projectName: z.string().min(1, 'projectName is required'),
-  issueTracker: issueTrackerConfigSchema,
-  storage: storageConfigSchema,
-  auth: authConfigSchema,
-  widget: widgetConfigSchema,
-  aiTool: aiToolChoiceSchema,
-  categories: z.array(categorySchema).default([]),
-  testCases: z.array(testCaseSchema),
-  testers: z.array(testerSchema),
-}).superRefine((data, ctx) => {
-  // Duplicate category IDs
-  const categoryIds = new Set<string>();
-  for (let i = 0; i < data.categories.length; i++) {
-    const id = data.categories[i].id;
-    if (categoryIds.has(id)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['categories', i, 'id'],
-        message: `Duplicate category ID: "${id}"`,
-      });
-    }
-    categoryIds.add(id);
-  }
-
-  // Duplicate test case IDs
-  const testCaseIds = new Set<string>();
-  for (let i = 0; i < data.testCases.length; i++) {
-    const id = data.testCases[i].id;
-    if (testCaseIds.has(id)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['testCases', i, 'id'],
-        message: `Duplicate test case ID: "${id}"`,
-      });
-    }
-    testCaseIds.add(id);
-  }
-
-  // Validate category references and ID prefix matching
-  const validCategoryIds = [...categoryIds];
-  for (let i = 0; i < data.testCases.length; i++) {
-    const tc = data.testCases[i];
-
-    // Category must reference a valid category ID (only if categories are defined)
-    if (validCategoryIds.length > 0 && !categoryIds.has(tc.category)) {
-      const suggestion = findClosestMatch(tc.category, validCategoryIds);
-      const hint = suggestion ? ` Did you mean "${suggestion}"?` : '';
-      ctx.addIssue({
-        code: 'custom',
-        path: ['testCases', i, 'category'],
-        message: `Category "${tc.category}" not found in categories.${hint}`,
-      });
+export const punchlistConfigSchema = z
+  .object({
+    projectName: z.string().min(1, 'projectName is required'),
+    issueTracker: issueTrackerConfigSchema,
+    storage: storageConfigSchema,
+    auth: authConfigSchema,
+    widget: widgetConfigSchema,
+    aiTool: aiToolChoiceSchema,
+    categories: z.array(categorySchema).default([]),
+    testCases: z.array(testCaseSchema),
+    testers: z.array(testerSchema),
+  })
+  .superRefine((data, ctx) => {
+    // Duplicate category IDs
+    const categoryIds = new Set<string>();
+    for (let i = 0; i < data.categories.length; i++) {
+      const id = data.categories[i].id;
+      if (categoryIds.has(id)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['categories', i, 'id'],
+          message: `Duplicate category ID: "${id}"`,
+        });
+      }
+      categoryIds.add(id);
     }
 
-    // Test ID prefix must match the category field
-    const prefix = tc.id.replace(/-\d{3}$/, '');
-    if (prefix !== tc.category) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['testCases', i, 'id'],
-        message: `Test ID prefix "${prefix}" does not match category "${tc.category}"`,
-      });
+    // Duplicate test case IDs
+    const testCaseIds = new Set<string>();
+    for (let i = 0; i < data.testCases.length; i++) {
+      const id = data.testCases[i].id;
+      if (testCaseIds.has(id)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['testCases', i, 'id'],
+          message: `Duplicate test case ID: "${id}"`,
+        });
+      }
+      testCaseIds.add(id);
     }
-  }
-});
+
+    // Validate category references and ID prefix matching
+    const validCategoryIds = [...categoryIds];
+    for (let i = 0; i < data.testCases.length; i++) {
+      const tc = data.testCases[i];
+
+      // Category must reference a valid category ID (only if categories are defined)
+      if (validCategoryIds.length > 0 && !categoryIds.has(tc.category)) {
+        const suggestion = findClosestMatch(tc.category, validCategoryIds);
+        const hint = suggestion ? ` Did you mean "${suggestion}"?` : '';
+        ctx.addIssue({
+          code: 'custom',
+          path: ['testCases', i, 'category'],
+          message: `Category "${tc.category}" not found in categories.${hint}`,
+        });
+      }
+
+      // Test ID prefix must match the category field
+      const prefix = tc.id.replace(/-\d{3}$/, '');
+      if (prefix !== tc.category) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['testCases', i, 'id'],
+          message: `Test ID prefix "${prefix}" does not match category "${tc.category}"`,
+        });
+      }
+    }
+  });
 
 // --- Inferred types ---
 
@@ -289,3 +311,4 @@ export type Session = z.infer<typeof sessionSchema>;
 export type OpenIssue = z.infer<typeof openIssueSchema>;
 export type CreateQAFailureOpts = z.infer<typeof createQAFailureOptsSchema>;
 export type CreateSupportTicketOpts = z.infer<typeof createSupportTicketOptsSchema>;
+export type LabelDef = z.infer<typeof labelDefSchema>;

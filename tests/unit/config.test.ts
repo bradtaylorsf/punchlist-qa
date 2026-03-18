@@ -24,7 +24,12 @@ describe('config', () => {
     issueTracker: { type: 'github', repo: 'owner/repo' },
     storage: { type: 'sqlite', path: './punchlist.db' },
     auth: { type: 'token' },
-    widget: { position: 'bottom-right', theme: 'light', corsDomains: ['http://localhost:3000'], categories: [] },
+    widget: {
+      position: 'bottom-right',
+      theme: 'light',
+      corsDomains: ['http://localhost:3000'],
+      categories: [],
+    },
     aiTool: 'claude-code',
     categories: [],
     testCases: [],
@@ -95,7 +100,7 @@ describe('config', () => {
       writeFileSync(
         join(tempDir, '.env'),
         'PUNCHLIST_GITHUB_TOKEN=ghp_test123\nPUNCHLIST_AUTH_SECRET=a-long-secret-for-testing\n',
-        'utf-8'
+        'utf-8',
       );
       const loaded = loadConfig(tempDir);
       expect(loaded.secrets.githubToken).toBe('ghp_test123');

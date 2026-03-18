@@ -122,6 +122,114 @@ logger.info(`Test round ${round.id} created with ${cases.length} cases`);
 - `info` — normal operations (round created, issue filed)
 - `debug` — detailed debugging (query results, token validation)
 
+## Use Typed Error Classes
+
+Create specific error classes for distinct failure modes. Never use string matching to determine error handling behavior:
+
+```typescript
+// BAD — fragile string matching
+try {
+  await validateToken(token);
+} catch (err) {
+  if (err.message.includes('expired')) { ... }
+  if (err.message.includes('revoked')) { ... }
+}
+
+// GOOD — typed error classes with instanceof
+export class InvalidTokenError extends AppError {
+  constructor(message = 'Invalid token') {
+    super(message, 401, 'INVALID_TOKEN');
+  }
+}
+
+export class RevokedUserError extends AppError {
+  constructor(public readonly userId: string) {
+    super('User has been revoked', 403, 'USER_REVOKED');
+  }
+}
+
+export class RateLimitError extends AppError {
+  constructor(public readonly retryAfterMs: number) {
+    super('Rate limit exceeded', 429, 'RATE_LIMIT');
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+```
+
+Use `instanceof` checks in error handlers:
+
+```typescript
+try {
+  await validateToken(token);
+} catch (err) {
+  if (err instanceof InvalidTokenError) {
+    return res.status(401).json({ error: { code: 'INVALID_TOKEN' } });
+  }
+  if (err instanceof RevokedUserError) {
+    logger.warn('Revoked user attempted access', { userId: err.userId });
+    return res.status(403).json({ error: { code: 'USER_REVOKED' } });
+  }
+  if (err instanceof RateLimitError) {
+    res.set('Retry-After', String(Math.ceil(err.retryAfterMs / 1000)));
+    return res.status(429).json({ error: { code: 'RATE_LIMIT' } });
+  }
+  throw err; // Re-throw unexpected errors
+}
+```
+
+Key points:
+- Include relevant metadata on error classes (e.g., `retryAfterMs`, `userId`)
+- Use `instanceof` checks — never `message.includes(...)` or string matching
+- Each failure mode gets its own class for clear, type-safe handling
+
+## Validate External API Responses
+
+Treat API responses as untrusted system boundaries. Create Zod schemas for expected shapes and parse responses through them:
+
+```typescript
+import { z } from 'zod';
+
+const GitHubIssueResponseSchema = z.object({
+  id: z.number(),
+  number: z.number(),
+  html_url: z.string().url(),
+  state: z.enum(['open', 'closed']),
+  title: z.string(),
+});
+
+type GitHubIssueResponse = z.infer<typeof GitHubIssueResponseSchema>;
+
+async function createGitHubIssue(data: IssueInput): Promise<GitHubIssueResponse> {
+  const response = await fetch('https://api.github.com/repos/owner/repo/issues', {
+    method: 'POST',
+    body: JSON.stringify(data),
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    throw new ExternalApiError(`GitHub API returned ${response.status}`);
+  }
+
+  const body = await response.json();
+
+  // Parse at the boundary — don't trust the shape
+  const result = GitHubIssueResponseSchema.safeParse(body);
+  if (!result.success) {
+    throw new ExternalApiError('Unexpected GitHub API response shape', {
+      cause: result.error,
+    });
+  }
+
+  return result.data;
+}
+```
+
+Key points:
+- An unexpected response shape is a different error than a network failure — handle them separately
+- Use `.safeParse()` so you can log the Zod error details before throwing
+- Never use `as` type assertions on API responses — they skip runtime validation
+- Define small, focused schemas for each API response you consume
+
 ## Guardrails
 
 - Never use `console.log` in production code — use structured logger
@@ -129,3 +237,5 @@ logger.info(`Test round ${round.id} created with ${cases.length} cases`);
 - Always log structured data, not string templates
 - Never log sensitive data (tokens, passwords, secrets)
 - Use existing error classes from `src/utils/errors.ts`
+- Never use string matching on error messages — use typed error classes with `instanceof`
+- Always validate external API responses with Zod — never use `as` casts

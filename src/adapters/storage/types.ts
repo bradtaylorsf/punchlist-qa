@@ -41,8 +41,8 @@ export interface StorageAdapter {
   /** Delete a single result by ID */
   deleteResult(id: string): Promise<void>;
 
-  /** Delete all results matching the given test IDs within a round */
-  deleteResultsByTestIds(roundId: string, testIds: string[]): Promise<void>;
+  /** Delete all results matching the given test IDs within a round. Returns the count of deleted rows. */
+  deleteResultsByTestIds(roundId: string, testIds: string[]): Promise<number>;
 
   /** Update the linked issue on a result */
   updateResultIssue(id: string, issueUrl: string, issueNumber: number): Promise<Result>;

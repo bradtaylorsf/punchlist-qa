@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { randomUUID, randomBytes } from 'node:crypto';
 import type { StorageAdapter } from './types.js';
 import { runMigrations } from './migrations.js';
+import { roundSchema, resultSchema, userSchema, sessionSchema } from '../../shared/schemas.js';
 import type {
   Round,
   Result,
@@ -66,56 +67,56 @@ interface UserRow {
 }
 
 function rowToRound(row: RoundRow): Round {
-  return {
+  return roundSchema.parse({
     id: row.id,
     name: row.name,
     description: row.description,
-    status: row.status as Round['status'],
+    status: row.status,
     createdByEmail: row.created_by_email,
     createdByName: row.created_by_name,
     createdAt: row.created_at,
     completedAt: row.completed_at,
-  };
+  });
 }
 
 function rowToResult(row: ResultRow): Result {
-  return {
+  return resultSchema.parse({
     id: row.id,
     roundId: row.round_id,
     testId: row.test_id,
-    status: row.status as Result['status'],
+    status: row.status,
     testerName: row.tester_name,
     testerEmail: row.tester_email,
     description: row.description,
-    severity: row.severity as Result['severity'],
+    severity: row.severity,
     commitHash: row.commit_hash,
     issueUrl: row.issue_url,
     issueNumber: row.issue_number,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  });
 }
 
 function rowToSession(row: SessionRow): Session {
-  return {
+  return sessionSchema.parse({
     id: row.id,
     userEmail: row.user_email,
     expiresAt: row.expires_at,
     createdAt: row.created_at,
-  };
+  });
 }
 
 function rowToUser(row: UserRow): User {
-  return {
+  return userSchema.parse({
     id: row.id,
     email: row.email,
     name: row.name,
     tokenHash: row.token_hash,
-    role: row.role as User['role'],
+    role: row.role,
     invitedBy: row.invited_by,
     revoked: row.revoked === 1,
     createdAt: row.created_at,
-  };
+  });
 }
 
 export class SqliteAdapter implements StorageAdapter {
@@ -148,17 +149,28 @@ export class SqliteAdapter implements StorageAdapter {
     db.prepare(
       `INSERT INTO rounds (id, name, description, status, created_by_email, created_by_name, created_at, completed_at)
        VALUES (?, ?, ?, 'active', ?, ?, ?, NULL)`,
-    ).run(id, input.name, input.description ?? null, input.createdByEmail, input.createdByName, now);
+    ).run(
+      id,
+      input.name,
+      input.description ?? null,
+      input.createdByEmail,
+      input.createdByName,
+      now,
+    );
     return (await this.getRound(id))!;
   }
 
   async listRounds(): Promise<Round[]> {
-    const rows = this.getDb().prepare('SELECT * FROM rounds ORDER BY rowid DESC').all() as RoundRow[];
+    const rows = this.getDb()
+      .prepare('SELECT * FROM rounds ORDER BY rowid DESC')
+      .all() as RoundRow[];
     return rows.map(rowToRound);
   }
 
   async getRound(id: string): Promise<Round | null> {
-    const row = this.getDb().prepare('SELECT * FROM rounds WHERE id = ?').get(id) as RoundRow | undefined;
+    const row = this.getDb().prepare('SELECT * FROM rounds WHERE id = ?').get(id) as
+      | RoundRow
+      | undefined;
     return row ? rowToRound(row) : null;
   }
 
@@ -167,10 +179,22 @@ export class SqliteAdapter implements StorageAdapter {
     const sets: string[] = [];
     const values: unknown[] = [];
 
-    if (input.name !== undefined) { sets.push('name = ?'); values.push(input.name); }
-    if (input.description !== undefined) { sets.push('description = ?'); values.push(input.description); }
-    if (input.status !== undefined) { sets.push('status = ?'); values.push(input.status); }
-    if (input.completedAt !== undefined) { sets.push('completed_at = ?'); values.push(input.completedAt); }
+    if (input.name !== undefined) {
+      sets.push('name = ?');
+      values.push(input.name);
+    }
+    if (input.description !== undefined) {
+      sets.push('description = ?');
+      values.push(input.description);
+    }
+    if (input.status !== undefined) {
+      sets.push('status = ?');
+      values.push(input.status);
+    }
+    if (input.completedAt !== undefined) {
+      sets.push('completed_at = ?');
+      values.push(input.completedAt);
+    }
 
     if (sets.length > 0) {
       values.push(id);
@@ -191,11 +215,18 @@ export class SqliteAdapter implements StorageAdapter {
     const now = new Date().toISOString();
 
     // Check for existing result to preserve ID, created_at, and issue link on replace
-    const existing = db.prepare(
-      'SELECT id, created_at, issue_url, issue_number FROM results WHERE round_id = ? AND test_id = ?',
-    ).get(roundId, input.testId) as {
-      id: string; created_at: string; issue_url: string | null; issue_number: number | null;
-    } | undefined;
+    const existing = db
+      .prepare(
+        'SELECT id, created_at, issue_url, issue_number FROM results WHERE round_id = ? AND test_id = ?',
+      )
+      .get(roundId, input.testId) as
+      | {
+          id: string;
+          created_at: string;
+          issue_url: string | null;
+          issue_number: number | null;
+        }
+      | undefined;
 
     const id = existing?.id ?? randomUUID();
     const createdAt = existing?.created_at ?? now;
@@ -204,12 +235,19 @@ export class SqliteAdapter implements StorageAdapter {
       `INSERT OR REPLACE INTO results (id, round_id, test_id, status, tester_name, tester_email, description, severity, commit_hash, issue_url, issue_number, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
-      id, roundId, input.testId, input.status,
-      input.testerName, input.testerEmail,
-      input.description ?? null, input.severity ?? null,
+      id,
+      roundId,
+      input.testId,
+      input.status,
+      input.testerName,
+      input.testerEmail,
+      input.description ?? null,
+      input.severity ?? null,
       input.commitHash ?? null,
-      existing?.issue_url ?? null, existing?.issue_number ?? null,
-      createdAt, now,
+      existing?.issue_url ?? null,
+      existing?.issue_number ?? null,
+      createdAt,
+      now,
     );
 
     const row = db.prepare('SELECT * FROM results WHERE id = ?').get(id) as ResultRow;
@@ -217,7 +255,9 @@ export class SqliteAdapter implements StorageAdapter {
   }
 
   async listResults(roundId: string): Promise<Result[]> {
-    const rows = this.getDb().prepare('SELECT * FROM results WHERE round_id = ? ORDER BY rowid DESC').all(roundId) as ResultRow[];
+    const rows = this.getDb()
+      .prepare('SELECT * FROM results WHERE round_id = ? ORDER BY rowid DESC')
+      .all(roundId) as ResultRow[];
     return rows.map(rowToResult);
   }
 
@@ -225,20 +265,30 @@ export class SqliteAdapter implements StorageAdapter {
     this.getDb().prepare('DELETE FROM results WHERE id = ?').run(id);
   }
 
-  async deleteResultsByTestIds(roundId: string, testIds: string[]): Promise<void> {
-    if (testIds.length === 0) return;
-    const placeholders = testIds.map(() => '?').join(', ');
-    this.getDb().prepare(
-      `DELETE FROM results WHERE round_id = ? AND test_id IN (${placeholders})`,
-    ).run(roundId, ...testIds);
+  async deleteResultsByTestIds(roundId: string, testIds: string[]): Promise<number> {
+    if (testIds.length === 0) return 0;
+    const db = this.getDb();
+    // SQLite default SQLITE_MAX_VARIABLE_NUMBER is 999. Use 900 as a safe batch size
+    // to leave room for the roundId parameter and avoid hitting the limit.
+    const BATCH_SIZE = 900;
+    let totalDeleted = 0;
+    for (let i = 0; i < testIds.length; i += BATCH_SIZE) {
+      const batch = testIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(', ');
+      const result = db
+        .prepare(`DELETE FROM results WHERE round_id = ? AND test_id IN (${placeholders})`)
+        .run(roundId, ...batch);
+      totalDeleted += result.changes;
+    }
+    return totalDeleted;
   }
 
   async updateResultIssue(id: string, issueUrl: string, issueNumber: number): Promise<Result> {
     const db = this.getDb();
     const now = new Date().toISOString();
-    const result = db.prepare(
-      'UPDATE results SET issue_url = ?, issue_number = ?, updated_at = ? WHERE id = ?',
-    ).run(issueUrl, issueNumber, now, id);
+    const result = db
+      .prepare('UPDATE results SET issue_url = ?, issue_number = ?, updated_at = ? WHERE id = ?')
+      .run(issueUrl, issueNumber, now, id);
     if (result.changes === 0) throw new Error('Result not found');
     const row = db.prepare('SELECT * FROM results WHERE id = ?').get(id) as ResultRow;
     return rowToResult(row);
@@ -264,31 +314,39 @@ export class SqliteAdapter implements StorageAdapter {
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
-    const row = this.getDb().prepare('SELECT * FROM users WHERE email = ?').get(email) as UserRow | undefined;
+    const row = this.getDb().prepare('SELECT * FROM users WHERE email = ?').get(email) as
+      | UserRow
+      | undefined;
     return row ? rowToUser(row) : null;
   }
 
   async getUserByTokenHash(tokenHash: string): Promise<User | null> {
-    const row = this.getDb().prepare('SELECT * FROM users WHERE token_hash = ?').get(tokenHash) as UserRow | undefined;
+    const row = this.getDb().prepare('SELECT * FROM users WHERE token_hash = ?').get(tokenHash) as
+      | UserRow
+      | undefined;
     return row ? rowToUser(row) : null;
   }
 
   async revokeUser(email: string): Promise<void> {
-    const result = this.getDb().prepare('UPDATE users SET revoked = 1 WHERE email = ?').run(email);
-    if (result.changes === 0) throw new Error('User not found');
+    // Convention: all deletes/revokes are idempotent — silently no-op when the record
+    // does not exist. Callers that need to distinguish "not found" from "already revoked"
+    // should query first. This matches the behavior of deleteResult and deleteSession.
+    this.getDb().prepare('UPDATE users SET revoked = 1 WHERE email = ?').run(email);
   }
 
   // --- Config ---
 
   async getConfig(key: string): Promise<string | null> {
-    const row = this.getDb().prepare('SELECT value FROM config WHERE key = ?').get(key) as { value: string } | undefined;
+    const row = this.getDb().prepare('SELECT value FROM config WHERE key = ?').get(key) as
+      | { value: string }
+      | undefined;
     return row?.value ?? null;
   }
 
   async setConfig(key: string, value: string): Promise<void> {
-    this.getDb().prepare(
-      'INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)',
-    ).run(key, value);
+    this.getDb()
+      .prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)')
+      .run(key, value);
   }
 
   // --- Sessions ---
@@ -306,30 +364,56 @@ export class SqliteAdapter implements StorageAdapter {
   }
 
   async getSession(id: string): Promise<Session | null> {
-    const row = this.getDb().prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow | undefined;
+    const row = this.getDb().prepare('SELECT * FROM sessions WHERE id = ?').get(id) as
+      | SessionRow
+      | undefined;
     return row ? rowToSession(row) : null;
   }
 
   async getSessionWithUser(id: string): Promise<{ session: Session; user: User } | null> {
-    const row = this.getDb().prepare(
-      `SELECT
+    const row = this.getDb()
+      .prepare(
+        `SELECT
         s.id AS s_id, s.user_email AS s_user_email, s.expires_at AS s_expires_at, s.created_at AS s_created_at,
         u.id AS u_id, u.email AS u_email, u.name AS u_name, u.token_hash AS u_token_hash,
         u.role AS u_role, u.invited_by AS u_invited_by, u.revoked AS u_revoked, u.created_at AS u_created_at
        FROM sessions s
        JOIN users u ON s.user_email = u.email
        WHERE s.id = ?`,
-    ).get(id) as {
-      s_id: string; s_user_email: string; s_expires_at: string; s_created_at: string;
-      u_id: string; u_email: string; u_name: string; u_token_hash: string;
-      u_role: string; u_invited_by: string; u_revoked: number; u_created_at: string;
-    } | undefined;
+      )
+      .get(id) as
+      | {
+          s_id: string;
+          s_user_email: string;
+          s_expires_at: string;
+          s_created_at: string;
+          u_id: string;
+          u_email: string;
+          u_name: string;
+          u_token_hash: string;
+          u_role: string;
+          u_invited_by: string;
+          u_revoked: number;
+          u_created_at: string;
+        }
+      | undefined;
     if (!row) return null;
     return {
-      session: { id: row.s_id, userEmail: row.s_user_email, expiresAt: row.s_expires_at, createdAt: row.s_created_at },
+      session: {
+        id: row.s_id,
+        userEmail: row.s_user_email,
+        expiresAt: row.s_expires_at,
+        createdAt: row.s_created_at,
+      },
       user: rowToUser({
-        id: row.u_id, email: row.u_email, name: row.u_name, token_hash: row.u_token_hash,
-        role: row.u_role, invited_by: row.u_invited_by, revoked: row.u_revoked, created_at: row.u_created_at,
+        id: row.u_id,
+        email: row.u_email,
+        name: row.u_name,
+        token_hash: row.u_token_hash,
+        role: row.u_role,
+        invited_by: row.u_invited_by,
+        revoked: row.u_revoked,
+        created_at: row.u_created_at,
       }),
     };
   }
@@ -340,6 +424,21 @@ export class SqliteAdapter implements StorageAdapter {
 
   async deleteExpiredSessions(): Promise<void> {
     this.getDb().prepare('DELETE FROM sessions WHERE expires_at < ?').run(new Date().toISOString());
+  }
+
+  /**
+   * Start a background interval to delete expired sessions.
+   * The interval is unref'd so it won't prevent Node.js from exiting.
+   * Returns a stop function that clears the interval.
+   */
+  startSessionCleanup(intervalMs: number = 60 * 60 * 1000): () => void {
+    const timer = setInterval(() => {
+      this.deleteExpiredSessions().catch(() => {
+        // Swallow errors — cleanup is best-effort
+      });
+    }, intervalMs);
+    timer.unref();
+    return () => clearInterval(timer);
   }
 
   // --- Internal ---

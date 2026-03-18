@@ -7,7 +7,10 @@ import {
   formatSupportTicketTitle,
   formatSupportTicketBody,
 } from '../../src/adapters/issues/format.js';
-import type { CreateQAFailureOpts, CreateSupportTicketOpts } from '../../src/adapters/issues/types.js';
+import type {
+  CreateQAFailureOpts,
+  CreateSupportTicketOpts,
+} from '../../src/adapters/issues/types.js';
 
 describe('issue formatting', () => {
   describe('sanitizeForHtmlComment', () => {
@@ -37,7 +40,7 @@ describe('issue formatting', () => {
   describe('formatQAFailureTitle', () => {
     it('should produce [QA Failure] title (testId)', () => {
       expect(formatQAFailureTitle('billing-001', 'Subscribe to Pro plan')).toBe(
-        '[QA Failure] Subscribe to Pro plan (billing-001)'
+        '[QA Failure] Subscribe to Pro plan (billing-001)',
       );
     });
   });
@@ -131,7 +134,7 @@ describe('issue formatting', () => {
         consoleErrors: "TypeError: Cannot read properties of undefined (reading 'map')",
       });
       expect(body).toContain('<details><summary>Console Errors</summary>');
-      expect(body).toContain("TypeError: Cannot read properties");
+      expect(body).toContain('TypeError: Cannot read properties');
     });
 
     it('should include category when provided', () => {
@@ -142,7 +145,7 @@ describe('issue formatting', () => {
     it('should include custom context when provided', () => {
       const body = formatSupportTicketBody({
         ...baseOpts,
-        customContext: { 'Account ID': '12345', 'Plan': 'Pro' },
+        customContext: { 'Account ID': '12345', Plan: 'Pro' },
       });
       expect(body).toContain('### Additional Context');
       expect(body).toContain('**Account ID:** 12345');

@@ -85,13 +85,18 @@ export function runMigrations(db: Database.Database): void {
   `);
 
   const applied = new Set(
-    db.prepare('SELECT version FROM migrations').all().map((r) => (r as { version: number }).version),
+    db
+      .prepare('SELECT version FROM migrations')
+      .all()
+      .map((r) => (r as { version: number }).version),
   );
 
   const pending = migrations.filter((m) => !applied.has(m.version));
   if (pending.length === 0) return;
 
-  const insert = db.prepare('INSERT INTO migrations (version, description, applied_at) VALUES (?, ?, ?)');
+  const insert = db.prepare(
+    'INSERT INTO migrations (version, description, applied_at) VALUES (?, ?, ?)',
+  );
 
   const applyAll = db.transaction(() => {
     for (const m of pending) {

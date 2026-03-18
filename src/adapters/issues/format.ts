@@ -49,9 +49,10 @@ export function formatSupportTicketBody(opts: CreateSupportTicketOpts): string {
   const lines: string[] = ['## Support Request', ''];
 
   if (opts.userName || opts.userEmail) {
-    const from = opts.userName && opts.userEmail
-      ? `${opts.userName} (${opts.userEmail})`
-      : opts.userName || opts.userEmail;
+    const from =
+      opts.userName && opts.userEmail
+        ? `${opts.userName} (${opts.userEmail})`
+        : opts.userName || opts.userEmail;
     lines.push(`**From:** ${from}`);
   }
 

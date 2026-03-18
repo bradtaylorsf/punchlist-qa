@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_PORT, DEFAULT_LABELS, CONFIG_FILENAME, DEFAULT_CONFIG } from '../../src/shared/constants.js';
+import {
+  DEFAULT_PORT,
+  DEFAULT_LABELS,
+  CONFIG_FILENAME,
+  DEFAULT_CONFIG,
+} from '../../src/shared/constants.js';
 
 describe('constants', () => {
   it('should have a default port', () => {
@@ -21,7 +26,7 @@ describe('constants', () => {
   });
 
   it('should have expected default labels', () => {
-    const names = DEFAULT_LABELS.map(l => l.name);
+    const names = DEFAULT_LABELS.map((l) => l.name);
     expect(names).toContain('punchlist');
     expect(names).toContain('qa:fail');
     expect(names).toContain('support');

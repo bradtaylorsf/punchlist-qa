@@ -24,18 +24,21 @@ describe('validateConfig', () => {
     const config = { ...sampleConfig, projectName: '' };
     const result = validateConfig(config);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.includes('projectName'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('projectName'))).toBe(true);
   });
 
   it('should reject invalid issueTracker type', () => {
-    const config = { ...sampleConfig, issueTracker: { ...sampleConfig.issueTracker, type: 'invalid' } };
+    const config = {
+      ...sampleConfig,
+      issueTracker: { ...sampleConfig.issueTracker, type: 'invalid' },
+    };
     const result = validateConfig(config);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.includes('issueTracker.type'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('issueTracker.type'))).toBe(true);
   });
 
   it('should reject missing issueTracker', () => {
-    const { issueTracker, ...config } = sampleConfig;
+    const { issueTracker: _issueTracker, ...config } = sampleConfig;
     const result = validateConfig(config);
     expect(result.valid).toBe(false);
   });
@@ -65,7 +68,10 @@ describe('validateConfig', () => {
   });
 
   it('should reject non-array corsDomains', () => {
-    const config = { ...sampleConfig, widget: { ...sampleConfig.widget, corsDomains: 'not-array' } };
+    const config = {
+      ...sampleConfig,
+      widget: { ...sampleConfig.widget, corsDomains: 'not-array' },
+    };
     const result = validateConfig(config);
     expect(result.valid).toBe(false);
   });
@@ -121,7 +127,14 @@ describe('cross-field validation', () => {
       ...baseConfig,
       categories: [{ id: 'auth', label: 'Auth' }],
       testCases: [
-        { id: 'auth-001', title: 'Login test', category: 'auth', priority: 'high', instructions: 'Login', expectedResult: 'Success' },
+        {
+          id: 'auth-001',
+          title: 'Login test',
+          category: 'auth',
+          priority: 'high',
+          instructions: 'Login',
+          expectedResult: 'Success',
+        },
       ],
     };
     const result = validateConfig(config);
@@ -133,7 +146,14 @@ describe('cross-field validation', () => {
       ...baseConfig,
       categories: [{ id: 'user-auth', label: 'User Auth' }],
       testCases: [
-        { id: 'user-auth-001', title: 'Login test', category: 'user-auth', priority: 'high', instructions: 'Login', expectedResult: 'Success' },
+        {
+          id: 'user-auth-001',
+          title: 'Login test',
+          category: 'user-auth',
+          priority: 'high',
+          instructions: 'Login',
+          expectedResult: 'Success',
+        },
       ],
     };
     const result = validateConfig(config);
@@ -157,7 +177,7 @@ describe('cross-field validation', () => {
     };
     const result = validateConfig(config);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.includes('Duplicate category ID'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('Duplicate category ID'))).toBe(true);
   });
 
   it('should reject duplicate test case IDs', () => {
@@ -165,39 +185,75 @@ describe('cross-field validation', () => {
       ...baseConfig,
       categories: [{ id: 'auth', label: 'Auth' }],
       testCases: [
-        { id: 'auth-001', title: 'Test 1', category: 'auth', priority: 'high', instructions: 'Do X', expectedResult: 'Y' },
-        { id: 'auth-001', title: 'Test 2', category: 'auth', priority: 'low', instructions: 'Do Z', expectedResult: 'W' },
+        {
+          id: 'auth-001',
+          title: 'Test 1',
+          category: 'auth',
+          priority: 'high',
+          instructions: 'Do X',
+          expectedResult: 'Y',
+        },
+        {
+          id: 'auth-001',
+          title: 'Test 2',
+          category: 'auth',
+          priority: 'low',
+          instructions: 'Do Z',
+          expectedResult: 'W',
+        },
       ],
     };
     const result = validateConfig(config);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.includes('Duplicate test case ID'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('Duplicate test case ID'))).toBe(true);
   });
 
   it('should reject invalid category reference with suggestion', () => {
     const config = {
       ...baseConfig,
-      categories: [{ id: 'auth', label: 'Auth' }, { id: 'checkout', label: 'Checkout' }],
+      categories: [
+        { id: 'auth', label: 'Auth' },
+        { id: 'checkout', label: 'Checkout' },
+      ],
       testCases: [
-        { id: 'auht-001', title: 'Test', category: 'auht', priority: 'high', instructions: 'Do X', expectedResult: 'Y' },
+        {
+          id: 'auht-001',
+          title: 'Test',
+          category: 'auht',
+          priority: 'high',
+          instructions: 'Do X',
+          expectedResult: 'Y',
+        },
       ],
     };
     const result = validateConfig(config);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.includes('not found') && e.includes('Did you mean'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('not found') && e.includes('Did you mean'))).toBe(
+      true,
+    );
   });
 
   it('should reject test ID prefix that does not match category', () => {
     const config = {
       ...baseConfig,
-      categories: [{ id: 'auth', label: 'Auth' }, { id: 'checkout', label: 'Checkout' }],
+      categories: [
+        { id: 'auth', label: 'Auth' },
+        { id: 'checkout', label: 'Checkout' },
+      ],
       testCases: [
-        { id: 'checkout-001', title: 'Test', category: 'auth', priority: 'high', instructions: 'Do X', expectedResult: 'Y' },
+        {
+          id: 'checkout-001',
+          title: 'Test',
+          category: 'auth',
+          priority: 'high',
+          instructions: 'Do X',
+          expectedResult: 'Y',
+        },
       ],
     };
     const result = validateConfig(config);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.includes('does not match category'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('does not match category'))).toBe(true);
   });
 });
 
