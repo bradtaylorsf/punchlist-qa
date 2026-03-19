@@ -135,6 +135,22 @@ export function useTestingState() {
     [activeRound],
   );
 
+  const updateResultIssue = useCallback(
+    async (resultId: string, testId: string, issueUrl: string, issueNumber: number) => {
+      if (!activeRound) return;
+      await api.linkResultIssue(activeRound.id, resultId, issueUrl, issueNumber);
+      setResults((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(testId);
+        if (existing) {
+          next.set(testId, { ...existing, issueUrl, issueNumber });
+        }
+        return next;
+      });
+    },
+    [activeRound],
+  );
+
   const setResultSynced = useCallback((testId: string, result: TestResult) => {
     setResults((prev) => new Map(prev).set(testId, result));
   }, []);
@@ -150,6 +166,7 @@ export function useTestingState() {
     undoResult,
     completeRound,
     updateRoundDetails,
+    updateResultIssue,
     setResultSynced,
   };
 }

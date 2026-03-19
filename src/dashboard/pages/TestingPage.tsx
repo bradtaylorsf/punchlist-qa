@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useConfig } from '../hooks/useConfig';
+import { useAuth } from '../hooks/useAuth';
 import { useTestingState } from '../hooks/useTestingState';
 import { useOfflineSync } from '../hooks/useOfflineSync';
 import { RoundSelector } from '../components/RoundSelector';
@@ -27,8 +28,11 @@ export function TestingPage() {
     undoResult,
     completeRound,
     updateRoundDetails,
+    updateResultIssue,
     setResultSynced,
   } = useTestingState();
+
+  const { user } = useAuth();
 
   const { pendingCount, addPending } = useOfflineSync({ onSynced: setResultSynced });
 
@@ -119,7 +123,7 @@ export function TestingPage() {
     description: string;
     createIssue: boolean;
   }) {
-    if (!activeRound || !failingTestId || !config) return;
+    if (!activeRound || !failingTestId || !config || !user) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -159,17 +163,22 @@ export function TestingPage() {
         const tc = config.testCases.find((t) => t.id === failingTestId);
         if (tc) {
           try {
-            await api.createIssue({
+            const issueRes = await api.createIssue({
               testId: tc.id,
               testTitle: tc.title,
               category: tc.category,
               severity: data.severity,
               description: data.description || tc.title,
-              testerName: 'tester',
-              testerEmail: 'tester@test.com',
+              testerName: user!.name,
+              testerEmail: user!.email,
               commitHash,
               roundName: activeRound.name,
             });
+            // Link the issue to the result
+            const result = results.get(failingTestId);
+            if (result) {
+              await updateResultIssue(result.id, failingTestId, issueRes.data.url, issueRes.data.number);
+            }
           } catch {
             // Issue creation is best-effort
           }
