@@ -338,6 +338,10 @@ export class SqliteAdapter implements StorageAdapter {
     this.getDb().prepare('UPDATE users SET revoked = 1 WHERE email = ?').run(email);
   }
 
+  async updateUserTokenHash(email: string, newTokenHash: string): Promise<void> {
+    this.getDb().prepare('UPDATE users SET token_hash = ? WHERE email = ?').run(newTokenHash, email);
+  }
+
   // --- Config ---
 
   async getConfig(key: string): Promise<string | null> {

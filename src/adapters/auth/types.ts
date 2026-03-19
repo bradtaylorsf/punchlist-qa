@@ -24,6 +24,7 @@ export interface AuthAdapter {
     options?: { role?: string; baseUrl?: string },
   ): Promise<InviteResult>;
   revokeAccess(email: string): Promise<void>;
+  regenerateToken(email: string, options?: { baseUrl?: string }): Promise<InviteResult>;
   listUsers(): Promise<User[]>;
 
   // Login (validates token hash against stored user, creates session)

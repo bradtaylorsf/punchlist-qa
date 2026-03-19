@@ -92,6 +92,25 @@ export class TokenAuthAdapter implements AuthAdapter {
     return { user, token, inviteUrl };
   }
 
+  async regenerateToken(
+    email: string,
+    options?: { baseUrl?: string },
+  ): Promise<InviteResult> {
+    const user = await this.storage.getUserByEmail(email);
+    if (!user) throw new Error(`User not found: ${email}`);
+
+    const token = this.generateToken(email);
+    const tokenHash = this.hashToken(token);
+    await this.storage.updateUserTokenHash(email, tokenHash);
+
+    const base = options?.baseUrl ?? this.baseUrl;
+    const inviteUrl = `${base}/join?token=${encodeURIComponent(token)}`;
+
+    // Refetch user with updated hash
+    const updated = await this.storage.getUserByEmail(email);
+    return { user: updated!, token, inviteUrl };
+  }
+
   async revokeAccess(email: string): Promise<void> {
     await this.storage.revokeUser(email);
   }

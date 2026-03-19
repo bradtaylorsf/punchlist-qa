@@ -64,6 +64,9 @@ export interface StorageAdapter {
   /** Revoke a user's access */
   revokeUser(email: string): Promise<void>;
 
+  /** Update a user's token hash (for token regeneration) */
+  updateUserTokenHash(email: string, newTokenHash: string): Promise<void>;
+
   // --- Config (key-value) ---
 
   /** Get a config value by key, or null if not set */

@@ -24,6 +24,10 @@ export function UsersPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
+  // Regenerate
+  const [shownInviteUrl, setShownInviteUrl] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState<string | null>(null);
+
   // Revoke
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
   const [revoking, setRevoking] = useState(false);
@@ -56,6 +60,7 @@ export function UsersPage() {
     e.preventDefault();
     setInviting(true);
     setInviteUrl(null);
+    setShownInviteUrl(null);
     setError(null);
     try {
       const res = await api.inviteUser({ email, name, role });
@@ -68,6 +73,20 @@ export function UsersPage() {
       setError(err instanceof Error ? err.message : 'Failed to invite user');
     } finally {
       setInviting(false);
+    }
+  }
+
+  async function handleRegenerate(targetEmail: string) {
+    setRegenerating(targetEmail);
+    setError(null);
+    try {
+      const res = await api.regenerateToken(targetEmail);
+      setShownInviteUrl(res.data.inviteUrl);
+      setInviteUrl(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to regenerate token');
+    } finally {
+      setRegenerating(null);
     }
   }
 
@@ -143,13 +162,26 @@ export function UsersPage() {
             {inviting ? 'Inviting...' : 'Invite'}
           </button>
         </form>
-        {inviteUrl && (
-          <div className="mt-3 bg-green-50 border border-green-200 rounded-md px-3 py-2">
-            <p className="text-xs text-green-700 mb-1">Invite created! Share this URL:</p>
-            <code className="text-xs text-green-900 break-all select-all">{inviteUrl}</code>
-          </div>
-        )}
       </div>
+
+      {(inviteUrl || shownInviteUrl) && (
+        <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-green-800">Invite URL</p>
+              <code className="text-xs text-green-900 break-all select-all">{inviteUrl || shownInviteUrl}</code>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText((inviteUrl || shownInviteUrl)!);
+              }}
+              className="shrink-0 ml-4 px-3 py-1.5 text-xs bg-green-100 text-green-800 hover:bg-green-200 rounded border border-green-300"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* User Table */}
       {loading ? (
@@ -190,13 +222,24 @@ export function UsersPage() {
                     {new Date(u.createdAt).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-2 text-right">
-                    {!u.revoked && u.email !== user?.email && (
-                      <button
-                        onClick={() => setRevokeTarget(u.email)}
-                        className="text-xs text-red-600 hover:text-red-800"
-                      >
-                        Revoke
-                      </button>
+                    {!u.revoked && (
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleRegenerate(u.email)}
+                          disabled={regenerating === u.email}
+                          className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                        >
+                          {regenerating === u.email ? 'Regenerating...' : 'Regenerate'}
+                        </button>
+                        {u.email !== user?.email && (
+                          <button
+                            onClick={() => setRevokeTarget(u.email)}
+                            className="text-xs text-red-600 hover:text-red-800"
+                          >
+                            Revoke
+                          </button>
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>

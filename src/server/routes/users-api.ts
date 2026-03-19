@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { AuthAdapter } from '../../adapters/auth/types.js';
 import { requireAdmin } from '../middleware/require-admin.js';
-import { inviteUserRequestSchema, revokeUserRequestSchema } from '../../shared/schemas.js';
+import { inviteUserRequestSchema, revokeUserRequestSchema, regenerateTokenRequestSchema } from '../../shared/schemas.js';
 
 export function usersRouter(authAdapter?: AuthAdapter): Router {
   const router = Router();
@@ -46,6 +46,20 @@ export function usersRouter(authAdapter?: AuthAdapter): Router {
         const body = revokeUserRequestSchema.parse(req.body);
         await authAdapter.revokeAccess(body.email);
         res.json({ success: true });
+      } catch (err) {
+        next(err);
+      }
+    });
+
+    router.post('/regenerate', requireAdmin, async (req, res, next) => {
+      try {
+        const body = regenerateTokenRequestSchema.parse(req.body);
+        const result = await authAdapter.regenerateToken(body.email);
+        const { tokenHash: _hash, ...safeUser } = result.user;
+        res.json({
+          success: true,
+          data: { user: safeUser, inviteUrl: result.inviteUrl },
+        });
       } catch (err) {
         next(err);
       }
