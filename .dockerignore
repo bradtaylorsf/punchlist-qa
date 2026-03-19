@@ -1,0 +1,10 @@
+node_modules
+dist
+.punchlist
+.env
+.env.local
+*.db*
+.git
+.DS_Store
+coverage
+.turbo

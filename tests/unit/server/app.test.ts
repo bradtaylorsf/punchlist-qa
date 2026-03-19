@@ -100,6 +100,19 @@ describe('createApp integration', () => {
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 
+  it('responds to GET /health with 200', async () => {
+    const adapter = createMockAdapter();
+    const app = createApp({ issueAdapter: adapter, corsDomains: [] });
+    server = app.listen(0);
+
+    const res = await makeRequest(server, 'GET', '/health');
+
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.status).toBe('ok');
+    expect(body.timestamp).toBeDefined();
+  });
+
   it('serves widget.js endpoint', async () => {
     const adapter = createMockAdapter();
     const app = createApp({
