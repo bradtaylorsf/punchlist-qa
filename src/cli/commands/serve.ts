@@ -24,13 +24,30 @@ export async function serveCommand(): Promise<void> {
     corsDomains: config.widget.corsDomains,
   });
 
-  app.listen(DEFAULT_PORT, () => {
+  const port = Number(process.env.PORT) || DEFAULT_PORT;
+  const host = process.env.HOST || '127.0.0.1';
+
+  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+
+  const server = app.listen(port, host, () => {
     console.log(`\n  Punchlist QA Server`);
     console.log(`  Project: ${config.projectName}`);
-    console.log(`  Port: ${DEFAULT_PORT}`);
+    console.log(`  Port: ${port}`);
+    console.log(`  Host: ${host}`);
     console.log(`  CORS: ${config.widget.corsDomains.join(', ')}`);
-    console.log(`\n  Dashboard: http://localhost:${DEFAULT_PORT}/`);
-    console.log(`  Widget:    http://localhost:${DEFAULT_PORT}/widget.js`);
-    console.log(`  API:       http://localhost:${DEFAULT_PORT}/api/\n`);
+    console.log(`\n  Dashboard: http://${displayHost}:${port}/`);
+    console.log(`  Widget:    http://${displayHost}:${port}/widget.js`);
+    console.log(`  API:       http://${displayHost}:${port}/api/\n`);
   });
+
+  function shutdown(signal: string) {
+    console.log(`\n  Received ${signal}. Shutting down...`);
+    server.close(async () => {
+      await storage.close();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10_000).unref();
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }

@@ -33,6 +33,11 @@ export interface AppDependencies {
 export function createApp(deps: AppDependencies): Express {
   const app = express();
 
+  // Health check — no auth, no CORS, no body parsing
+  app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
   // Parse JSON bodies (explicit limit to document intent)
   app.use(express.json({ limit: '100kb' }));
 
