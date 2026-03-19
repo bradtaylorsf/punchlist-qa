@@ -70,6 +70,18 @@ describe('config', () => {
     });
   });
 
+  describe('aiTool: both', () => {
+    it('should accept "both" as a valid aiTool value', () => {
+      const bothConfig: PunchlistConfig = {
+        ...sampleConfig,
+        aiTool: 'both',
+      };
+      writeConfig(bothConfig, tempDir);
+      const loaded = loadConfig(tempDir);
+      expect(loaded.aiTool).toBe('both');
+    });
+  });
+
   describe('loadConfig', () => {
     it('should load and parse config from directory', () => {
       writeConfig(sampleConfig, tempDir);

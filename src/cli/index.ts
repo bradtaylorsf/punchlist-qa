@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const commands = ['init', 'serve', 'invite', 'revoke', 'users'] as const;
+const commands = ['init', 'serve', 'invite', 'revoke', 'users', 'update-skills'] as const;
 type Command = (typeof commands)[number];
 
 function printHelp(): void {
@@ -19,6 +19,7 @@ Commands:
   invite <email> --name <name>  Generate a tester invite link
   revoke <email>                Revoke a tester's access
   users                         List all users
+  update-skills                 Update AI skills to latest version
 
 Options:
   --help, -h        Show this help message
@@ -130,6 +131,11 @@ export async function main(argv: string[]): Promise<void> {
     case 'users': {
       const { usersCommand } = await import('./commands/users.js');
       await usersCommand();
+      break;
+    }
+    case 'update-skills': {
+      const { updateSkillsCommand } = await import('./commands/update-skills.js');
+      await updateSkillsCommand();
       break;
     }
   }

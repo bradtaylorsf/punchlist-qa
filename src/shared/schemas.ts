@@ -6,7 +6,7 @@ import { findClosestMatch } from './string-utils.js';
 export const issueTrackerTypeSchema = z.enum(['github', 'jira', 'linear']);
 export const storageAdapterTypeSchema = z.enum(['sqlite', 'dynamodb', 'file']);
 export const authAdapterTypeSchema = z.enum(['token', 'auth0']);
-export const aiToolChoiceSchema = z.enum(['claude-code', 'codex', 'none']);
+export const aiToolChoiceSchema = z.enum(['claude-code', 'codex', 'both', 'none']);
 export const widgetPositionSchema = z.enum([
   'bottom-right',
   'bottom-left',
