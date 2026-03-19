@@ -28,6 +28,7 @@ export function RoundHeader({ round, onSave, disabled = false }: RoundHeaderProp
   }, [editingDesc]);
 
   async function saveName() {
+    if (!editingName) return;
     setEditingName(false);
     const trimmed = name.trim();
     if (!trimmed || trimmed === round.name) {
@@ -42,6 +43,7 @@ export function RoundHeader({ round, onSave, disabled = false }: RoundHeaderProp
   }
 
   async function saveDescription() {
+    if (!editingDesc) return;
     setEditingDesc(false);
     const trimmed = description.trim();
     const current = round.description || '';
