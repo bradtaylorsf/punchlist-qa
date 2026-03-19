@@ -9,8 +9,12 @@ export async function updateSkillsCommand(): Promise<void> {
   let config;
   try {
     config = loadConfig(cwd);
-  } catch {
-    console.error('  No punchlist.config.json found. Run `punchlist-qa init` first.');
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+      console.error('  No punchlist.config.json found. Run `punchlist-qa init` first.');
+    } else {
+      console.error(`  Failed to load config: ${err instanceof Error ? err.message : err}`);
+    }
     process.exit(1);
   }
 
