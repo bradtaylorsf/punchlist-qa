@@ -18,7 +18,11 @@
       "http://localhost:4747",
       "http://localhost:5173"
     ],
-    "categories": ["bug", "ux", "feature-request"]
+    "categories": [
+      "bug",
+      "ux",
+      "feature-request"
+    ]
   },
   "aiTool": "claude-code",
   "categories": [
@@ -148,84 +152,140 @@
       "expectedResult": "Your display name (from the invite) is shown next to the Logout button."
     },
     {
+      "id": "dash-006",
+      "title": "Tester name displayed on completed test cards",
+      "category": "dash",
+      "priority": "low",
+      "instructions": "Submit a test result (pass, fail, skip, or blocked). Look at the test card status area.",
+      "expectedResult": "Text 'tested by [Your Name]' appears on the card after the status badge."
+    },
+    {
+      "id": "dash-007",
+      "title": "Issue link shown on TestCard after failure",
+      "category": "dash",
+      "priority": "medium",
+      "instructions": "Click Fail on a test card. In the Failure Dialog, check 'Create GitHub issue' and submit. Look at the test card.",
+      "expectedResult": "A clickable issue number link (e.g. #42) appears on the card, opening the GitHub issue in a new tab."
+    },
+    {
+      "id": "dash-008",
+      "title": "Admin-only Users page",
+      "category": "dash",
+      "priority": "high",
+      "instructions": "Login as an admin user. Check the nav bar for a 'Users' link. Click it. Then login as a tester and check again.",
+      "expectedResult": "Admin sees 'Users' nav link and can access /users. Tester does not see the link and sees 'Admin access required' if navigating directly."
+    },
+    {
+      "id": "dash-009",
+      "title": "Invite user via Users page",
+      "category": "dash",
+      "priority": "high",
+      "instructions": "As admin, go to Users page. Fill in email, name, select role, and click Invite.",
+      "expectedResult": "Invite URL appears in a green box. New user appears in the table below with 'active' status."
+    },
+    {
+      "id": "dash-010",
+      "title": "Revoke user via Users page",
+      "category": "dash",
+      "priority": "medium",
+      "instructions": "As admin, go to Users page. Click 'Revoke' on an active user. Confirm in the dialog.",
+      "expectedResult": "User status changes to 'revoked' in the table. Revoke button disappears for that user."
+    },
+    {
       "id": "rounds-001",
-      "title": "Create a new test round via API",
+      "title": "Create a new test round",
       "category": "rounds",
       "priority": "high",
-      "instructions": "Using curl or browser console, POST to /api/rounds with {name: 'Sprint 1 QA'} (auth cookie required).",
-      "expectedResult": "201 response with round object containing UUID id, name, status='active', your email as createdByEmail."
+      "instructions": "On the Testing page, click the 'New Round' button in the round selector dropdown. Enter a name like 'Sprint 1 QA' and click Create.",
+      "expectedResult": "Round is created and automatically selected. Round name appears as the page header. Status is 'active'."
     },
     {
       "id": "rounds-002",
-      "title": "List all test rounds",
+      "title": "Switch between test rounds",
       "category": "rounds",
       "priority": "high",
-      "instructions": "Create 2+ rounds, then GET /api/rounds.",
-      "expectedResult": "200 response with array of all rounds, newest first."
+      "instructions": "Create 2+ rounds. Open the round selector dropdown and click a different round.",
+      "expectedResult": "Round selector shows all rounds. Clicking a round switches the active round and reloads its results."
     },
     {
       "id": "rounds-003",
-      "title": "Update round name and description",
+      "title": "Edit round name via page header",
       "category": "rounds",
       "priority": "medium",
-      "instructions": "Create a round, then PUT /api/rounds/:id with {name: 'Updated Name', description: 'New desc'}.",
-      "expectedResult": "200 response with updated round. Name and description changed, other fields preserved."
+      "instructions": "With an active round, click the round name in the page header. Change it to a new name and press Enter.",
+      "expectedResult": "Name updates inline. Refreshing the page shows the new name persisted."
     },
     {
       "id": "rounds-004",
-      "title": "Complete a round",
+      "title": "Complete a round via button",
       "category": "rounds",
       "priority": "medium",
-      "instructions": "Create a round, then PUT /api/rounds/:id with {status: 'completed', completedAt: '2026-03-17T00:00:00Z'}.",
-      "expectedResult": "Round status changes to 'completed' with the completedAt timestamp."
+      "instructions": "With an active round, click the 'Complete Round' button. Confirm in the dialog.",
+      "expectedResult": "Round status changes to 'completed'. Complete Round button disappears. Test action buttons are disabled. Round name is no longer editable."
     },
     {
       "id": "rounds-005",
-      "title": "Round creation uses session identity",
+      "title": "Round creation shows your name as creator",
       "category": "rounds",
       "priority": "high",
-      "instructions": "POST /api/rounds with {name: 'Test', createdByEmail: 'fake@hacker.com', createdByName: 'Hacker'}.",
-      "expectedResult": "Round is created but createdByEmail and createdByName are from the session, not the request body."
+      "instructions": "Create a new round and check the round details in the History page.",
+      "expectedResult": "Your logged-in name appears as the round creator, not a hardcoded value."
+    },
+    {
+      "id": "rounds-006",
+      "title": "Edit round name with keyboard shortcuts",
+      "category": "rounds",
+      "priority": "medium",
+      "instructions": "Click the round name header text on the Testing page. Change the text, then test: press Enter to save, press Escape to revert, or click away (blur) to save.",
+      "expectedResult": "Enter saves the new name. Escape reverts to the original name without saving. Clicking away (blur) saves the name."
+    },
+    {
+      "id": "rounds-007",
+      "title": "Edit round description",
+      "category": "rounds",
+      "priority": "low",
+      "instructions": "Click the 'Click to add description...' text below the round name. Type a description and press Enter.",
+      "expectedResult": "Description is saved and displayed. Editing again allows changing or clearing it."
     },
     {
       "id": "results-001",
       "title": "Submit a passing test result",
       "category": "results",
       "priority": "high",
-      "instructions": "Create a round, then POST /api/rounds/:roundId/results with {testId: 'auth-001', status: 'pass', testerName: 'x', testerEmail: 'x@x.com'}.",
-      "expectedResult": "201 response with result object. testerName and testerEmail from session, not body."
+      "instructions": "With an active round, find a test card and click the green 'Pass' button.",
+      "expectedResult": "Card border turns green. Status badge shows 'pass'. Action buttons are replaced with an 'Undo' button."
     },
     {
       "id": "results-002",
       "title": "Submit a failing result with severity",
       "category": "results",
       "priority": "high",
-      "instructions": "POST result with {testId: 'auth-002', status: 'fail', severity: 'blocker', description: 'Login crashes'}.",
-      "expectedResult": "201 response. Result includes severity='blocker' and description."
+      "instructions": "Click the red 'Fail' button on a test card. In the Failure Dialog, select 'blocker' severity, enter a description, check 'Create GitHub issue', and click 'Report Failure'.",
+      "expectedResult": "Card border turns red. Status badge shows 'fail (blocker)'. If issue was created, issue number link appears on the card."
     },
     {
       "id": "results-003",
       "title": "Submit skip and blocked results",
       "category": "results",
       "priority": "medium",
-      "instructions": "Submit two results: one with status='skip', one with status='blocked'.",
-      "expectedResult": "Both accepted with 201. Each result has correct status stored."
+      "instructions": "Click 'Skip' on one test card and 'Blocked' on another.",
+      "expectedResult": "Skip card has yellow border and 'skip' badge. Blocked card has orange border and 'blocked' badge."
     },
     {
       "id": "results-004",
-      "title": "Delete (undo) a test result",
+      "title": "Undo a test result",
       "category": "results",
       "priority": "high",
-      "instructions": "Submit a result for auth-001, then DELETE /api/rounds/:roundId/results/auth-001.",
-      "expectedResult": "200 response with deleted=1. GET results no longer includes auth-001."
+      "instructions": "After submitting a result, click the 'Undo' button on the test card.",
+      "expectedResult": "Card reverts to untested state. Action buttons (Pass/Fail/Skip/Blocked) reappear."
     },
     {
       "id": "results-005",
-      "title": "List results for a round",
+      "title": "Progress bar updates with results",
       "category": "results",
       "priority": "high",
-      "instructions": "Submit 3 results to a round, then GET /api/rounds/:roundId/results.",
-      "expectedResult": "200 response with array of all 3 results for the round."
+      "instructions": "Submit several results with different statuses. Watch the progress bar at the top.",
+      "expectedResult": "Progress bar updates in real time showing pass (green), fail (red), skip (yellow), blocked (orange) segments."
     },
     {
       "id": "widget-001",
