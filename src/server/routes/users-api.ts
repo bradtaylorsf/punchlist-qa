@@ -28,10 +28,11 @@ export function usersRouter(authAdapter?: AuthAdapter): Router {
         const result = await authAdapter.createInvite(body.email, body.name, req.user!.email, {
           role: body.role,
         });
+        const { tokenHash: _hash, ...safeUser } = result.user;
         res.status(201).json({
           success: true,
           data: {
-            user: { ...result.user, tokenHash: undefined },
+            user: safeUser,
             inviteUrl: result.inviteUrl,
           },
         });

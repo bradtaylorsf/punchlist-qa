@@ -190,7 +190,7 @@ export function UsersPage() {
                     {new Date(u.createdAt).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-2 text-right">
-                    {!u.revoked && (
+                    {!u.revoked && u.email !== user?.email && (
                       <button
                         onClick={() => setRevokeTarget(u.email)}
                         className="text-xs text-red-600 hover:text-red-800"
