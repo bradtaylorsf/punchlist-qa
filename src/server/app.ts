@@ -57,7 +57,7 @@ export function createApp(deps: AppDependencies): Express {
     app.use('/api/config', auth, configRouter(deps.config));
     app.use('/api/issues', auth, issuesRouter(deps.issueAdapter));
     app.use('/api/commit', auth, commitRouter());
-    app.use('/api/users', auth, usersRouter());
+    app.use('/api/users', auth, usersRouter(deps.authAdapter));
   }
 
   // Static file serving

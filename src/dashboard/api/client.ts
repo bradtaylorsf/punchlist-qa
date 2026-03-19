@@ -65,6 +65,27 @@ export function getMe() {
   );
 }
 
+export function listUsers() {
+  return request<{ success: boolean; data: Array<Record<string, unknown>> }>('/users');
+}
+
+export function inviteUser(input: { email: string; name: string; role: string }) {
+  return request<{
+    success: boolean;
+    data: { user: Record<string, unknown>; inviteUrl: string };
+  }>('/users/invite', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function revokeUser(email: string) {
+  return request<{ success: boolean }>('/users/revoke', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
 // Config
 export function getConfig() {
   return request<{
