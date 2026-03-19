@@ -54,6 +54,19 @@ function ask(
   });
 }
 
+export function copySkills(platform: 'claude-code' | 'codex', cwd: string): void {
+  const skillsSource = join(__dirname, '../../../skills', platform);
+  const targetDir =
+    platform === 'claude-code' ? join(cwd, '.claude', 'skills') : join(cwd, '.codex', 'skills');
+  if (existsSync(skillsSource) && readdirSync(skillsSource).length > 0) {
+    mkdirSync(targetDir, { recursive: true });
+    cpSync(skillsSource, targetDir, { recursive: true });
+    console.log(`  ✅ Copied AI skills to ${targetDir.replace(cwd, '.')}`);
+  } else {
+    console.log(`  ⏭ No AI skills found for ${platform}`);
+  }
+}
+
 export async function initCommand(): Promise<void> {
   const cwd = process.cwd();
   const configPath = join(cwd, CONFIG_FILENAME);
@@ -98,15 +111,24 @@ export async function initCommand(): Promise<void> {
       .map((d) => d.trim())
       .filter(Boolean);
 
+    // Auto-detect AI tool from project structure
+    const hasClaudeDir = existsSync(join(cwd, '.claude'));
+    const hasCodexDir = existsSync(join(cwd, '.codex')) || existsSync(join(cwd, '.agents'));
+    let detectedAiDefault = '1'; // default: Claude Code
+    if (hasClaudeDir && hasCodexDir) detectedAiDefault = '3';
+    else if (hasCodexDir) detectedAiDefault = '2';
+
     console.log('\n  AI tool integration:');
     console.log('  1) Claude Code');
     console.log('  2) Codex');
-    console.log('  3) None\n');
-    const aiChoice = await ask(rl, '  Choose (1/2/3)', '1');
+    console.log('  3) Both');
+    console.log('  4) None\n');
+    const aiChoice = await ask(rl, '  Choose (1/2/3/4)', detectedAiDefault);
     const aiToolMap: Record<string, AIToolChoice> = {
       '1': 'claude-code',
       '2': 'codex',
-      '3': 'none',
+      '3': 'both',
+      '4': 'none',
     };
     const aiTool = aiToolMap[aiChoice] || 'claude-code';
 
@@ -156,20 +178,10 @@ export async function initCommand(): Promise<void> {
 
     // Step 5: Copy AI skills
     if (aiTool !== 'none') {
-      const skillsSource = join(
-        __dirname,
-        '../../../skills',
-        aiTool === 'claude-code' ? 'claude-code' : 'codex',
-      );
-      const skillsTarget =
-        aiTool === 'claude-code' ? join(cwd, '.claude', 'skills') : join(cwd, '.codex', 'skills');
-
-      if (existsSync(skillsSource) && readdirSync(skillsSource).length > 0) {
-        mkdirSync(skillsTarget, { recursive: true });
-        cpSync(skillsSource, skillsTarget, { recursive: true });
-        console.log(`  ✅ Copied AI skills to ${skillsTarget.replace(cwd, '.')}`);
-      } else {
-        console.log(`  ⏭ No AI skills found for ${aiTool}`);
+      const platforms: Array<'claude-code' | 'codex'> =
+        aiTool === 'both' ? ['claude-code', 'codex'] : [aiTool as 'claude-code' | 'codex'];
+      for (const platform of platforms) {
+        copySkills(platform, cwd);
       }
     }
 
