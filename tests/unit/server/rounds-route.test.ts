@@ -54,6 +54,11 @@ function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdap
     getSessionWithUser: vi.fn(),
     deleteSession: vi.fn(),
     deleteExpiredSessions: vi.fn(),
+    createAccessRequest: vi.fn(),
+    listAccessRequests: vi.fn().mockResolvedValue([]),
+    getAccessRequest: vi.fn(),
+    getAccessRequestByEmail: vi.fn(),
+    updateAccessRequestStatus: vi.fn(),
     ...overrides,
   };
 }

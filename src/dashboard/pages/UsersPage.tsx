@@ -11,6 +11,17 @@ interface UserRecord {
   createdAt: string;
 }
 
+interface AccessRequestRecord {
+  id: string;
+  email: string;
+  name: string;
+  status: string;
+  message: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}
+
 export function UsersPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState<UserRecord[]>([]);
@@ -32,21 +43,29 @@ export function UsersPage() {
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
   const [revoking, setRevoking] = useState(false);
 
-  const loadUsers = useCallback(async () => {
+  // Access requests
+  const [accessRequests, setAccessRequests] = useState<AccessRequestRecord[]>([]);
+  const [approving, setApproving] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
     try {
-      const res = await api.listUsers();
-      setUsers(res.data as unknown as UserRecord[]);
+      const [usersRes, requestsRes] = await Promise.all([
+        api.listUsers(),
+        api.listAccessRequests(),
+      ]);
+      setUsers(usersRes.data as unknown as UserRecord[]);
+      setAccessRequests(requestsRes.data as unknown as AccessRequestRecord[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load users');
+      setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (user?.role === 'admin') loadUsers();
+    if (user?.role === 'admin') loadData();
     else setLoading(false);
-  }, [user?.role, loadUsers]);
+  }, [user?.role, loadData]);
 
   if (user?.role !== 'admin') {
     return (
@@ -68,7 +87,7 @@ export function UsersPage() {
       setEmail('');
       setName('');
       setRole('tester');
-      await loadUsers();
+      await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to invite user');
     } finally {
@@ -96,11 +115,38 @@ export function UsersPage() {
     try {
       await api.revokeUser(targetEmail);
       setRevokeTarget(null);
-      await loadUsers();
+      await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to revoke user');
     } finally {
       setRevoking(false);
+    }
+  }
+
+  async function handleApprove(requestId: string) {
+    setApproving(requestId);
+    setError(null);
+    try {
+      const res = await api.approveAccessRequest(requestId);
+      setInviteUrl(res.data.inviteUrl);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve request');
+    } finally {
+      setApproving(null);
+    }
+  }
+
+  async function handleReject(requestId: string) {
+    setApproving(requestId);
+    setError(null);
+    try {
+      await api.rejectAccessRequest(requestId);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject request');
+    } finally {
+      setApproving(null);
     }
   }
 
@@ -246,6 +292,49 @@ export function UsersPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Access Requests */}
+      {accessRequests.filter((r) => r.status === 'pending').length > 0 && (
+        <div className="bg-white border border-amber-200 rounded-lg overflow-hidden">
+          <div className="px-4 py-3 bg-amber-50 border-b border-amber-200">
+            <h2 className="text-sm font-medium text-amber-800">
+              Pending Access Requests ({accessRequests.filter((r) => r.status === 'pending').length})
+            </h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {accessRequests
+              .filter((r) => r.status === 'pending')
+              .map((r) => (
+                <div key={r.id} className="px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{r.name}</p>
+                    <p className="text-xs text-gray-500">{r.email}</p>
+                    {r.message && <p className="text-xs text-gray-400 mt-1">{r.message}</p>}
+                    <p className="text-xs text-gray-400">
+                      Requested {new Date(r.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleApprove(r.id)}
+                      disabled={approving === r.id}
+                      className="text-xs px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded border border-green-200 disabled:opacity-50"
+                    >
+                      {approving === r.id ? 'Approving...' : 'Approve'}
+                    </button>
+                    <button
+                      onClick={() => handleReject(r.id)}
+                      disabled={approving === r.id}
+                      className="text-xs px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded border border-red-200 disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
         </div>
       )}
 

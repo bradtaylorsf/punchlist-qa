@@ -4,16 +4,25 @@ import { dirname } from 'node:path';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import type { StorageAdapter } from './types.js';
 import { runMigrations } from './migrations.js';
-import { roundSchema, resultSchema, userSchema, sessionSchema } from '../../shared/schemas.js';
+import {
+  roundSchema,
+  resultSchema,
+  userSchema,
+  sessionSchema,
+  accessRequestSchema,
+} from '../../shared/schemas.js';
 import type {
   Round,
   Result,
   User,
   Session,
+  AccessRequest,
+  AccessRequestStatus,
   CreateRoundInput,
   UpdateRoundInput,
   SubmitResultInput,
   CreateUserInput,
+  CreateAccessRequestInput,
 } from '../../shared/types.js';
 
 interface SqliteAdapterOptions {
@@ -66,6 +75,17 @@ interface UserRow {
   created_at: string;
 }
 
+interface AccessRequestRow {
+  id: string;
+  email: string;
+  name: string;
+  status: string;
+  message: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
 function rowToRound(row: RoundRow): Round {
   return roundSchema.parse({
     id: row.id,
@@ -115,6 +135,19 @@ function rowToUser(row: UserRow): User {
     role: row.role,
     invitedBy: row.invited_by,
     revoked: row.revoked === 1,
+    createdAt: row.created_at,
+  });
+}
+
+function rowToAccessRequest(row: AccessRequestRow): AccessRequest {
+  return accessRequestSchema.parse({
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    status: row.status as AccessRequestStatus,
+    message: row.message,
+    reviewedBy: row.reviewed_by,
+    reviewedAt: row.reviewed_at,
     createdAt: row.created_at,
   });
 }
@@ -460,6 +493,46 @@ export class SqliteAdapter implements StorageAdapter {
     }, intervalMs);
     timer.unref();
     return () => clearInterval(timer);
+  }
+
+  // --- Access Requests ---
+
+  async createAccessRequest(input: CreateAccessRequestInput): Promise<AccessRequest> {
+    const db = this.getDb();
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO access_requests (id, email, name, status, message, created_at)
+       VALUES (?, ?, ?, 'pending', ?, ?)`,
+    ).run(id, input.email, input.name, input.message ?? null, now);
+    const row = db.prepare('SELECT * FROM access_requests WHERE id = ?').get(id) as AccessRequestRow;
+    return rowToAccessRequest(row);
+  }
+
+  async listAccessRequests(status?: string): Promise<AccessRequest[]> {
+    const db = this.getDb();
+    const rows = status
+      ? (db.prepare('SELECT * FROM access_requests WHERE status = ? ORDER BY created_at DESC').all(status) as AccessRequestRow[])
+      : (db.prepare('SELECT * FROM access_requests ORDER BY created_at DESC').all() as AccessRequestRow[]);
+    return rows.map(rowToAccessRequest);
+  }
+
+  async getAccessRequest(id: string): Promise<AccessRequest | null> {
+    const row = this.getDb().prepare('SELECT * FROM access_requests WHERE id = ?').get(id) as AccessRequestRow | undefined;
+    return row ? rowToAccessRequest(row) : null;
+  }
+
+  async getAccessRequestByEmail(email: string): Promise<AccessRequest | null> {
+    const row = this.getDb().prepare('SELECT * FROM access_requests WHERE email = ?').get(email) as AccessRequestRow | undefined;
+    return row ? rowToAccessRequest(row) : null;
+  }
+
+  async updateAccessRequestStatus(id: string, status: string, reviewedBy: string): Promise<AccessRequest> {
+    const db = this.getDb();
+    const now = new Date().toISOString();
+    db.prepare('UPDATE access_requests SET status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?').run(status, reviewedBy, now, id);
+    const row = db.prepare('SELECT * FROM access_requests WHERE id = ?').get(id) as AccessRequestRow;
+    return rowToAccessRequest(row);
   }
 
   // --- Internal ---

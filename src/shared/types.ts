@@ -34,4 +34,7 @@ export type {
   LabelDef,
   SupportTicketRequest,
   LoginRequest,
+  AccessRequestStatus,
+  AccessRequest,
+  CreateAccessRequestInput,
 } from './schemas.js';

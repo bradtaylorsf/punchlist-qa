@@ -257,6 +257,27 @@ export const sessionSchema = z.object({
   createdAt: z.string(),
 });
 
+// --- Access Request schemas ---
+
+export const accessRequestStatusSchema = z.enum(['pending', 'approved', 'rejected']);
+
+export const accessRequestSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  name: z.string(),
+  status: accessRequestStatusSchema,
+  message: z.string().nullable(),
+  reviewedBy: z.string().email().nullable(),
+  reviewedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const createAccessRequestInputSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1),
+  message: z.string().max(500).optional(),
+});
+
 // --- Main config schema ---
 
 export const punchlistConfigSchema = z
@@ -366,3 +387,6 @@ export type CreateSupportTicketOpts = z.infer<typeof createSupportTicketOptsSche
 export type LabelDef = z.infer<typeof labelDefSchema>;
 export type SupportTicketRequest = z.infer<typeof supportTicketRequestSchema>;
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
+export type AccessRequestStatus = z.infer<typeof accessRequestStatusSchema>;
+export type AccessRequest = z.infer<typeof accessRequestSchema>;
+export type CreateAccessRequestInput = z.infer<typeof createAccessRequestInputSchema>;

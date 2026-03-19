@@ -3,10 +3,12 @@ import type {
   Result,
   User,
   Session,
+  AccessRequest,
   CreateRoundInput,
   UpdateRoundInput,
   SubmitResultInput,
   CreateUserInput,
+  CreateAccessRequestInput,
 } from '../../shared/types.js';
 
 export interface StorageAdapter {
@@ -91,4 +93,21 @@ export interface StorageAdapter {
 
   /** Delete all expired sessions */
   deleteExpiredSessions(): Promise<void>;
+
+  // --- Access Requests ---
+
+  /** Create an access request */
+  createAccessRequest(input: CreateAccessRequestInput): Promise<AccessRequest>;
+
+  /** List access requests, optionally filtered by status */
+  listAccessRequests(status?: string): Promise<AccessRequest[]>;
+
+  /** Get access request by ID */
+  getAccessRequest(id: string): Promise<AccessRequest | null>;
+
+  /** Get access request by email */
+  getAccessRequestByEmail(email: string): Promise<AccessRequest | null>;
+
+  /** Update access request status */
+  updateAccessRequestStatus(id: string, status: string, reviewedBy: string): Promise<AccessRequest>;
 }

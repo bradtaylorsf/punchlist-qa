@@ -76,6 +76,23 @@ export const migrations: Migration[] = [
       CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
     `,
   },
+  {
+    version: 3,
+    description: 'Create access_requests table',
+    up: `
+      CREATE TABLE IF NOT EXISTS access_requests (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        message TEXT,
+        reviewed_by TEXT,
+        reviewed_at TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_access_requests_status ON access_requests(status);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

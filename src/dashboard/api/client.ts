@@ -191,6 +191,35 @@ export function getOpenIssue(testId: string) {
   }>(`/issues/open/${testId}`);
 }
 
+// Access Requests
+export function requestAccess(input: { email: string; name: string; message?: string }) {
+  return request<{ success: boolean; data: Record<string, unknown> }>('/access-requests', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function listAccessRequests(status?: string) {
+  const qs = status ? `?status=${status}` : '';
+  return request<{ success: boolean; data: Array<Record<string, unknown>> }>(
+    `/access-requests${qs}`,
+  );
+}
+
+export function approveAccessRequest(id: string) {
+  return request<{
+    success: boolean;
+    data: { request: Record<string, unknown>; user: Record<string, unknown>; inviteUrl: string };
+  }>(`/access-requests/${id}/approve`, { method: 'POST' });
+}
+
+export function rejectAccessRequest(id: string) {
+  return request<{ success: boolean; data: Record<string, unknown> }>(
+    `/access-requests/${id}/reject`,
+    { method: 'POST' },
+  );
+}
+
 // Commit
 export function getCommitSha() {
   return request<{ success: boolean; data: { sha: string } }>('/commit');
