@@ -18,7 +18,11 @@
       "http://localhost:4747",
       "http://localhost:5173"
     ],
-    "categories": ["bug", "ux", "feature-request"]
+    "categories": [
+      "bug",
+      "ux",
+      "feature-request"
+    ]
   },
   "aiTool": "claude-code",
   "categories": [
@@ -205,7 +209,7 @@
     },
     {
       "id": "rounds-003",
-      "title": "Edit round name inline",
+      "title": "Edit round name via page header",
       "category": "rounds",
       "priority": "medium",
       "instructions": "With an active round, click the round name in the page header. Change it to a new name and press Enter.",
@@ -229,11 +233,11 @@
     },
     {
       "id": "rounds-006",
-      "title": "Edit round name inline",
+      "title": "Edit round name with keyboard shortcuts",
       "category": "rounds",
       "priority": "medium",
-      "instructions": "Click the round name header text on the Testing page. Change the text and press Enter.",
-      "expectedResult": "Name is saved. Pressing Escape reverts to the original name. Blur also saves."
+      "instructions": "Click the round name header text on the Testing page. Change the text, then test: press Enter to save, press Escape to revert, or click away (blur) to save.",
+      "expectedResult": "Enter saves the new name. Escape reverts to the original name without saving. Clicking away (blur) saves the name."
     },
     {
       "id": "rounds-007",
