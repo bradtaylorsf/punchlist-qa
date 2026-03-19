@@ -7,6 +7,8 @@ import { ProgressBar } from '../components/ProgressBar';
 import { FilterBar } from '../components/FilterBar';
 import { TestCard } from '../components/TestCard';
 import { FailureDialog } from '../components/FailureDialog';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { RoundHeader } from '../components/RoundHeader';
 import { SyncBanner } from '../components/SyncBanner';
 import { exportRoundCSV } from '../utils/csv-export';
 import { isRetriableError } from '../api/client';
@@ -23,6 +25,8 @@ export function TestingPage() {
     selectRound,
     submitTestResult,
     undoResult,
+    completeRound,
+    updateRoundDetails,
     setResultSynced,
   } = useTestingState();
 
@@ -33,6 +37,8 @@ export function TestingPage() {
   const [failingTestId, setFailingTestId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   // Progress stats
   const stats = useMemo(() => {
@@ -194,8 +200,24 @@ export function TestingPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Testing</h1>
+        {activeRound ? (
+          <RoundHeader
+            round={activeRound}
+            onSave={updateRoundDetails}
+            disabled={activeRound.status === 'completed'}
+          />
+        ) : (
+          <h1 className="text-2xl font-semibold text-gray-900">Testing</h1>
+        )}
         <div className="flex items-center gap-3">
+          {activeRound && activeRound.status !== 'completed' && (
+            <button
+              onClick={() => setShowCompleteConfirm(true)}
+              className="text-xs px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded border border-green-200"
+            >
+              Complete Round
+            </button>
+          )}
           {activeRound && (
             <button
               onClick={handleExportCSV}
@@ -295,6 +317,26 @@ export function TestingPage() {
           onSubmit={handleFailSubmit}
           onCancel={() => setFailingTestId(null)}
           submitting={submitting}
+        />
+      )}
+
+      {showCompleteConfirm && (
+        <ConfirmDialog
+          title="Complete Round"
+          message="Mark this round as completed? No more results can be submitted after this."
+          confirmLabel="Complete Round"
+          confirmColor="bg-green-600 hover:bg-green-700"
+          onConfirm={async () => {
+            setCompleting(true);
+            try {
+              await completeRound();
+              setShowCompleteConfirm(false);
+            } finally {
+              setCompleting(false);
+            }
+          }}
+          onCancel={() => setShowCompleteConfirm(false)}
+          submitting={completing}
         />
       )}
     </div>

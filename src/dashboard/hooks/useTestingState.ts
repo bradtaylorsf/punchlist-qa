@@ -124,6 +124,17 @@ export function useTestingState() {
     setRounds((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
   }, [activeRound]);
 
+  const updateRoundDetails = useCallback(
+    async (input: { name?: string; description?: string | null }) => {
+      if (!activeRound) return;
+      const res = await api.updateRound(activeRound.id, input);
+      const updated = res.data as unknown as Round;
+      setActiveRound(updated);
+      setRounds((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    },
+    [activeRound],
+  );
+
   const setResultSynced = useCallback((testId: string, result: TestResult) => {
     setResults((prev) => new Map(prev).set(testId, result));
   }, []);
@@ -138,6 +149,7 @@ export function useTestingState() {
     submitTestResult,
     undoResult,
     completeRound,
+    updateRoundDetails,
     setResultSynced,
   };
 }
