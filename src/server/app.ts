@@ -80,6 +80,7 @@ function createNoopAuthAdapter(): AuthAdapter {
     validateToken: () => fail('Auth not configured'),
     createInvite: () => asyncFail('Auth not configured'),
     revokeAccess: () => asyncFail('Auth not configured'),
+    regenerateToken: () => asyncFail('Auth not configured'),
     listUsers: () => asyncFail('Auth not configured'),
     loginWithToken: () => asyncFail('Auth not configured'),
     createSession: () => asyncFail('Auth not configured'),

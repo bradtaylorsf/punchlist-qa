@@ -167,6 +167,10 @@ export const revokeUserRequestSchema = z.object({
   email: z.string().email(),
 });
 
+export const regenerateTokenRequestSchema = z.object({
+  email: z.string().email(),
+});
+
 export const updateResultIssueSchema = z.object({
   issueUrl: z.string().url(),
   issueNumber: z.number().int().positive(),
@@ -353,6 +357,7 @@ export type SubmitResultInput = z.infer<typeof submitResultInputSchema>;
 export type CreateUserInput = z.infer<typeof createUserInputSchema>;
 export type InviteUserRequest = z.infer<typeof inviteUserRequestSchema>;
 export type RevokeUserRequest = z.infer<typeof revokeUserRequestSchema>;
+export type RegenerateTokenRequest = z.infer<typeof regenerateTokenRequestSchema>;
 export type UpdateResultIssue = z.infer<typeof updateResultIssueSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type OpenIssue = z.infer<typeof openIssueSchema>;

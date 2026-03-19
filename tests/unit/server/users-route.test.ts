@@ -34,6 +34,7 @@ function createMockAuthAdapter(overrides: Partial<AuthAdapter> = {}): AuthAdapte
     validateToken: vi.fn(),
     createInvite: vi.fn(),
     revokeAccess: vi.fn(),
+    regenerateToken: vi.fn(),
     listUsers: vi.fn().mockResolvedValue([mockAdmin, mockTester]),
     loginWithToken: vi.fn(),
     createSession: vi.fn(),
@@ -209,6 +210,36 @@ describe('users routes', () => {
 
     const res = await makeRequest(server, 'POST', '/api/users/revoke', {
       email: 'admin@example.com',
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('POST /api/users/regenerate returns new invite URL for admin', async () => {
+    const auth = createMockAuthAdapter({
+      regenerateToken: vi.fn().mockResolvedValue({
+        user: { ...mockTester },
+        token: 'new-tok',
+        inviteUrl: 'http://localhost:4747/join?token=new-tok',
+      }),
+    });
+    createServer(mockAdmin, auth);
+
+    const res = await makeRequest(server, 'POST', '/api/users/regenerate', {
+      email: 'tester@example.com',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    const data = res.body.data as Record<string, unknown>;
+    expect(data.inviteUrl).toBe('http://localhost:4747/join?token=new-tok');
+    expect((data.user as Record<string, unknown>).tokenHash).toBeUndefined();
+  });
+
+  it('POST /api/users/regenerate returns 403 for tester', async () => {
+    const auth = createMockAuthAdapter();
+    createServer(mockTester, auth);
+
+    const res = await makeRequest(server, 'POST', '/api/users/regenerate', {
+      email: 'someone@example.com',
     });
     expect(res.status).toBe(403);
   });

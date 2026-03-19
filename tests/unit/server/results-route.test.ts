@@ -51,6 +51,7 @@ function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdap
     getUserByEmail: vi.fn(),
     getUserByTokenHash: vi.fn(),
     revokeUser: vi.fn(),
+    updateUserTokenHash: vi.fn(),
     getConfig: vi.fn(),
     setConfig: vi.fn(),
     createSession: vi.fn(),

@@ -86,6 +86,16 @@ export function revokeUser(email: string) {
   });
 }
 
+export function regenerateToken(email: string) {
+  return request<{
+    success: boolean;
+    data: { user: Record<string, unknown>; inviteUrl: string };
+  }>('/users/regenerate', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
 // Config
 export function getConfig() {
   return request<{
