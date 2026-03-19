@@ -117,7 +117,7 @@ export function TestingPage() {
     description: string;
     createIssue: boolean;
   }) {
-    if (!activeRound || !failingTestId || !config) return;
+    if (!activeRound || !failingTestId || !config || !user) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
