@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { StorageAdapter } from '../../adapters/storage/types.js';
-import { submitResultInputSchema } from '../../shared/schemas.js';
+import { submitResultInputSchema, updateResultIssueSchema } from '../../shared/schemas.js';
 
 const submitResultBodySchema = submitResultInputSchema.omit({
   testerName: true,
@@ -40,6 +40,16 @@ export function resultsRouter(storageAdapter: StorageAdapter): Router {
         req.params.testId,
       ]);
       res.json({ success: true, deleted: count });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.patch('/:roundId/results/:resultId/issue', async (req, res, next) => {
+    try {
+      const body = updateResultIssueSchema.parse(req.body);
+      const result = await storageAdapter.updateResultIssue(req.params.resultId, body.issueUrl, body.issueNumber);
+      res.json({ success: true, data: result });
     } catch (err) {
       next(err);
     }

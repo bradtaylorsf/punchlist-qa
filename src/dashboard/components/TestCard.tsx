@@ -73,6 +73,11 @@ export function TestCard({ testCase, result, onAction, onFail, onUndo, disabled 
                 #{result.issueNumber}
               </a>
             )}
+            {result && (
+              <span className="text-xs text-gray-400">
+                tested by {result.testerName}
+              </span>
+            )}
           </div>
           <h3
             className="text-sm font-medium text-gray-900 cursor-pointer"

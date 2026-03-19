@@ -182,4 +182,34 @@ describe('results routes', () => {
     expect(res.body.deleted).toBe(1);
     expect(storage.deleteResultsByTestIds).toHaveBeenCalledWith('round-1', ['auth-001']);
   });
+
+  it('PATCH /api/rounds/:roundId/results/:resultId/issue links issue to result', async () => {
+    const updatedResult = { ...mockResult, issueUrl: 'https://github.com/org/repo/issues/42', issueNumber: 42 };
+    const storage = createMockStorage({
+      updateResultIssue: vi.fn().mockResolvedValue(updatedResult),
+    });
+    createServer(storage);
+
+    const res = await makeRequest(server, 'PATCH', '/api/rounds/round-1/results/result-1/issue', {
+      issueUrl: 'https://github.com/org/repo/issues/42',
+      issueNumber: 42,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(storage.updateResultIssue).toHaveBeenCalledWith(
+      'result-1',
+      'https://github.com/org/repo/issues/42',
+      42,
+    );
+  });
+
+  it('PATCH /api/rounds/:roundId/results/:resultId/issue returns 400 for invalid body', async () => {
+    const storage = createMockStorage();
+    createServer(storage);
+
+    const res = await makeRequest(server, 'PATCH', '/api/rounds/round-1/results/result-1/issue', {
+      issueUrl: 'not-a-url',
+    });
+    expect(res.status).toBe(400);
+  });
 });

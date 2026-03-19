@@ -135,6 +135,13 @@ export function deleteResult(roundId: string, testId: string) {
   });
 }
 
+export function linkResultIssue(roundId: string, resultId: string, issueUrl: string, issueNumber: number) {
+  return request<{ success: boolean; data: Record<string, unknown> }>(
+    `/rounds/${roundId}/results/${resultId}/issue`,
+    { method: 'PATCH', body: JSON.stringify({ issueUrl, issueNumber }) },
+  );
+}
+
 // Issues
 export function createIssue(opts: Record<string, unknown>) {
   return request<{
