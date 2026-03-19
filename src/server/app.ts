@@ -12,6 +12,10 @@ import { configRouter } from './routes/config.js';
 import { issuesRouter } from './routes/issues-api.js';
 import { commitRouter } from './routes/commit.js';
 import { usersRouter } from './routes/users-api.js';
+import {
+  publicAccessRequestRouter,
+  adminAccessRequestRouter,
+} from './routes/access-requests.js';
 import { dashboardRouter } from './routes/dashboard.js';
 import type { IssueAdapter } from '../adapters/issues/types.js';
 import type { StorageAdapter } from '../adapters/storage/types.js';
@@ -47,6 +51,9 @@ export function createApp(deps: AppDependencies): Express {
   // Public routes (no auth required)
   app.use('/api/support', supportRouter(deps.issueAdapter));
   app.use('/api/auth', authRouter(deps.authAdapter ?? createNoopAuthAdapter()));
+  if (deps.storageAdapter) {
+    app.use('/api/access-requests', publicAccessRequestRouter(deps.storageAdapter));
+  }
 
   // Protected routes (require valid session)
   if (deps.storageAdapter && deps.authAdapter && deps.config) {
@@ -58,6 +65,7 @@ export function createApp(deps: AppDependencies): Express {
     app.use('/api/issues', auth, issuesRouter(deps.issueAdapter));
     app.use('/api/commit', auth, commitRouter());
     app.use('/api/users', auth, usersRouter(deps.authAdapter));
+    app.use('/api/access-requests', auth, adminAccessRequestRouter(deps.storageAdapter, deps.authAdapter));
   }
 
   // Static file serving
