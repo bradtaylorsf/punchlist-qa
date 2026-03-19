@@ -18,14 +18,11 @@ RUN corepack enable && corepack prepare pnpm@10.28.1 --activate
 
 WORKDIR /app
 
-# Install build tools for better-sqlite3 native addon
-RUN apk add --no-cache python3 make g++
-
+# Install build tools, build better-sqlite3 native addon, then remove tools in one layer
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
-
-# Remove build tools to keep image small
-RUN apk del python3 make g++
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+  && pnpm install --frozen-lockfile --prod \
+  && apk del .build-deps
 
 # Copy built artifacts from builder
 COPY --from=builder /app/dist ./dist
@@ -50,7 +47,7 @@ VOLUME /data/.punchlist
 EXPOSE 4747
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --spider --quiet http://localhost:4747/health || exit 1
+  CMD wget --spider --quiet http://localhost:${PORT}/health || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "bin/punchlist.mjs", "serve"]

@@ -27,15 +27,17 @@ export async function serveCommand(): Promise<void> {
   const port = Number(process.env.PORT) || DEFAULT_PORT;
   const host = process.env.HOST || '127.0.0.1';
 
+  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+
   const server = app.listen(port, host, () => {
     console.log(`\n  Punchlist QA Server`);
     console.log(`  Project: ${config.projectName}`);
     console.log(`  Port: ${port}`);
     console.log(`  Host: ${host}`);
     console.log(`  CORS: ${config.widget.corsDomains.join(', ')}`);
-    console.log(`\n  Dashboard: http://${host}:${port}/`);
-    console.log(`  Widget:    http://${host}:${port}/widget.js`);
-    console.log(`  API:       http://${host}:${port}/api/\n`);
+    console.log(`\n  Dashboard: http://${displayHost}:${port}/`);
+    console.log(`  Widget:    http://${displayHost}:${port}/widget.js`);
+    console.log(`  API:       http://${displayHost}:${port}/api/\n`);
   });
 
   function shutdown(signal: string) {
