@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 
 export function LoginPage() {
@@ -6,6 +6,27 @@ export function LoginPage() {
   const [token, setToken] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const autoLoginAttempted = useRef(false);
+
+  // Auto-login from invite URL query parameter
+  useEffect(() => {
+    if (autoLoginAttempted.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('token');
+    if (!urlToken) return;
+    autoLoginAttempted.current = true;
+    setLoading(true);
+    login(urlToken)
+      .then(() => {
+        // Clear token from URL without reload
+        window.history.replaceState({}, '', '/');
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Login failed');
+        setToken(urlToken);
+      })
+      .finally(() => setLoading(false));
+  }, [login]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -14,6 +35,7 @@ export function LoginPage() {
 
     try {
       await login(token);
+      window.history.replaceState({}, '', '/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
