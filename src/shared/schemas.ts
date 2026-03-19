@@ -157,6 +157,16 @@ export const createUserInputSchema = z.object({
   invitedBy: z.string().email(),
 });
 
+export const inviteUserRequestSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1),
+  role: userRoleSchema.default('tester'),
+});
+
+export const revokeUserRequestSchema = z.object({
+  email: z.string().email(),
+});
+
 export const updateResultIssueSchema = z.object({
   issueUrl: z.string().url(),
   issueNumber: z.number().int().positive(),
@@ -341,6 +351,8 @@ export type CreateRoundInput = z.infer<typeof createRoundInputSchema>;
 export type UpdateRoundInput = z.infer<typeof updateRoundInputSchema>;
 export type SubmitResultInput = z.infer<typeof submitResultInputSchema>;
 export type CreateUserInput = z.infer<typeof createUserInputSchema>;
+export type InviteUserRequest = z.infer<typeof inviteUserRequestSchema>;
+export type RevokeUserRequest = z.infer<typeof revokeUserRequestSchema>;
 export type UpdateResultIssue = z.infer<typeof updateResultIssueSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type OpenIssue = z.infer<typeof openIssueSchema>;

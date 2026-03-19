@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { LoginPage } from './components/LoginPage';
 import { TestingPage } from './pages/TestingPage';
 import { HistoryPage } from './pages/HistoryPage';
+import { UsersPage } from './pages/UsersPage';
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
@@ -25,6 +26,7 @@ function ProtectedRoutes() {
       <Routes>
         <Route path="/" element={<TestingPage />} />
         <Route path="/history" element={<HistoryPage />} />
+        <Route path="/users" element={<UsersPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

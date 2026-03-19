@@ -31,6 +31,16 @@ export function Layout({ children }: { children: ReactNode }) {
               >
                 History
               </NavLink>
+              {user?.role === 'admin' && (
+                <NavLink
+                  to="/users"
+                  className={({ isActive }) =>
+                    `text-sm ${isActive ? 'text-blue-600 font-medium' : 'text-gray-600 hover:text-gray-900'}`
+                  }
+                >
+                  Users
+                </NavLink>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-4">
