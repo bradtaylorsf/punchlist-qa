@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
+import { ProjectMembersSection } from '../components/ProjectMembersSection';
 import * as api from '../api/client';
 
 interface ProjectUser {
@@ -18,12 +19,11 @@ interface ProjectWithMembers {
   createdAt: string;
   updatedAt: string;
   members: ProjectUser[];
-  membersLoading: boolean;
 }
 
 export function ProjectsPage() {
   const { user } = useAuth();
-  const { projects, refreshProjects } = useProject();
+  const { refreshProjects } = useProject();
 
   const [projectsWithMembers, setProjectsWithMembers] = useState<ProjectWithMembers[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,33 +39,19 @@ export function ProjectsPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Add member state: keyed by projectId
-  const [addMemberEmail, setAddMemberEmail] = useState<Record<string, string>>({});
-  const [addMemberRole, setAddMemberRole] = useState<Record<string, string>>({});
-  const [addingMember, setAddingMember] = useState<string | null>(null);
-  const [removingMember, setRemovingMember] = useState<string | null>(null);
-
-  const loadMembers = useCallback(async (projectId: string): Promise<ProjectUser[]> => {
-    try {
-      const res = await api.listProjectUsers(projectId);
-      return res.data;
-    } catch {
-      return [];
-    }
-  }, []);
-
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       await refreshProjects();
-      // projects state updates asynchronously; use the API directly here
       const res = await api.listProjects();
-      const data = res.data;
-
       const withMembers = await Promise.all(
-        data.map(async (p) => {
-          const members = await loadMembers(p.id);
-          return { ...p, members, membersLoading: false };
+        res.data.map(async (p) => {
+          let members: ProjectUser[] = [];
+          try {
+            const mRes = await api.listProjectUsers(p.id);
+            members = mRes.data;
+          } catch { /* ignore */ }
+          return { ...p, members };
         }),
       );
       setProjectsWithMembers(withMembers);
@@ -74,7 +60,7 @@ export function ProjectsPage() {
     } finally {
       setLoading(false);
     }
-  }, [refreshProjects, loadMembers]);
+  }, [refreshProjects]);
 
   useEffect(() => {
     if (user?.role === 'admin') loadAll();
@@ -124,40 +110,10 @@ export function ProjectsPage() {
     }
   }
 
-  async function handleAddMember(projectId: string) {
-    const email = addMemberEmail[projectId]?.trim();
-    if (!email) return;
-    const role = addMemberRole[projectId] || 'tester';
-    setAddingMember(projectId);
-    setError(null);
-    try {
-      await api.addProjectUser(projectId, email, role);
-      setAddMemberEmail((prev) => ({ ...prev, [projectId]: '' }));
-      const members = await loadMembers(projectId);
-      setProjectsWithMembers((prev) =>
-        prev.map((p) => (p.id === projectId ? { ...p, members } : p)),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add member');
-    } finally {
-      setAddingMember(null);
-    }
-  }
-
-  async function handleRemoveMember(projectId: string, email: string) {
-    setRemovingMember(`${projectId}:${email}`);
-    setError(null);
-    try {
-      await api.removeProjectUser(projectId, email);
-      const members = await loadMembers(projectId);
-      setProjectsWithMembers((prev) =>
-        prev.map((p) => (p.id === projectId ? { ...p, members } : p)),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove member');
-    } finally {
-      setRemovingMember(null);
-    }
+  function handleMembersChanged(projectId: string, members: ProjectUser[]) {
+    setProjectsWithMembers((prev) =>
+      prev.map((p) => (p.id === projectId ? { ...p, members } : p)),
+    );
   }
 
   return (
@@ -252,83 +208,13 @@ export function ProjectsPage() {
                 </div>
               </div>
 
-              {/* Members table */}
-              {project.members.length > 0 && (
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-100">
-                    <tr>
-                      <th className="text-left px-4 py-2 font-medium text-gray-600">Email</th>
-                      <th className="text-left px-4 py-2 font-medium text-gray-600">Role</th>
-                      <th className="text-left px-4 py-2 font-medium text-gray-600">Added</th>
-                      <th className="text-right px-4 py-2 font-medium text-gray-600">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {project.members.map((m) => (
-                      <tr key={m.userEmail}>
-                        <td className="px-4 py-2 text-gray-900">{m.userEmail}</td>
-                        <td className="px-4 py-2">
-                          <span
-                            className={`text-xs px-1.5 py-0.5 rounded ${m.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}
-                          >
-                            {m.role}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-gray-500">
-                          {new Date(m.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-4 py-2 text-right">
-                          <button
-                            onClick={() => handleRemoveMember(project.id, m.userEmail)}
-                            disabled={removingMember === `${project.id}:${m.userEmail}`}
-                            className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
-                          >
-                            {removingMember === `${project.id}:${m.userEmail}`
-                              ? 'Removing...'
-                              : 'Remove'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              {/* Add member form */}
-              <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-end gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs text-gray-500 mb-1">Add member by email</label>
-                  <input
-                    type="email"
-                    value={addMemberEmail[project.id] || ''}
-                    onChange={(e) =>
-                      setAddMemberEmail((prev) => ({ ...prev, [project.id]: e.target.value }))
-                    }
-                    className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm"
-                    placeholder="user@example.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Role</label>
-                  <select
-                    value={addMemberRole[project.id] || 'tester'}
-                    onChange={(e) =>
-                      setAddMemberRole((prev) => ({ ...prev, [project.id]: e.target.value }))
-                    }
-                    className="border border-gray-300 rounded-md px-3 py-1.5 text-sm"
-                  >
-                    <option value="tester">Tester</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-                <button
-                  onClick={() => handleAddMember(project.id)}
-                  disabled={addingMember === project.id || !addMemberEmail[project.id]?.trim()}
-                  className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {addingMember === project.id ? 'Adding...' : 'Add'}
-                </button>
-              </div>
+              {/* Members section (extracted component) */}
+              <ProjectMembersSection
+                projectId={project.id}
+                members={project.members}
+                onMembersChanged={(members) => handleMembersChanged(project.id, members)}
+                onError={setError}
+              />
             </div>
           ))}
         </div>

@@ -4,22 +4,12 @@ import { dirname } from 'node:path';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import type { StorageAdapter } from './types.js';
 import { runMigrations } from './migrations.js';
-import {
-  roundSchema,
-  resultSchema,
-  userSchema,
-  sessionSchema,
-  accessRequestSchema,
-  projectSchema,
-  projectUserSchema,
-} from '../../shared/schemas.js';
 import type {
   Round,
   Result,
   User,
   Session,
   AccessRequest,
-  AccessRequestStatus,
   Project,
   ProjectUser,
   CreateRoundInput,
@@ -31,175 +21,28 @@ import type {
   UpdateProjectInput,
 } from '../../shared/types.js';
 import { encrypt } from '../../shared/encryption.js';
+import {
+  rowToProject,
+  rowToProjectUser,
+  rowToRound,
+  rowToResult,
+  rowToSession,
+  rowToUser,
+  rowToAccessRequest,
+} from './row-converters.js';
+import type {
+  ProjectRow,
+  ProjectUserRow,
+  RoundRow,
+  ResultRow,
+  SessionRow,
+  UserRow,
+  AccessRequestRow,
+} from './row-converters.js';
 
 interface SqliteAdapterOptions {
   dbPath?: string;
   encryptionSecret?: string;
-}
-
-// Row types (snake_case from SQLite)
-interface ProjectRow {
-  id: string;
-  repo_slug: string;
-  name: string;
-  github_token_encrypted: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface ProjectUserRow {
-  project_id: string;
-  user_email: string;
-  role: string;
-  created_at: string;
-}
-
-interface RoundRow {
-  id: string;
-  name: string;
-  description: string | null;
-  status: string;
-  created_by_email: string;
-  created_by_name: string;
-  created_at: string;
-  completed_at: string | null;
-  project_id: string | null;
-}
-
-interface ResultRow {
-  id: string;
-  round_id: string;
-  test_id: string;
-  status: string;
-  tester_name: string;
-  tester_email: string;
-  description: string | null;
-  severity: string | null;
-  commit_hash: string | null;
-  issue_url: string | null;
-  issue_number: number | null;
-  created_at: string;
-  updated_at: string;
-  project_id: string | null;
-}
-
-interface SessionRow {
-  id: string;
-  user_email: string;
-  expires_at: string;
-  created_at: string;
-}
-
-interface UserRow {
-  id: string;
-  email: string;
-  name: string;
-  token_hash: string;
-  role: string;
-  invited_by: string;
-  revoked: number;
-  created_at: string;
-}
-
-interface AccessRequestRow {
-  id: string;
-  email: string;
-  name: string;
-  status: string;
-  message: string | null;
-  reviewed_by: string | null;
-  reviewed_at: string | null;
-  created_at: string;
-  project_id: string | null;
-}
-
-function rowToProject(row: ProjectRow): Project {
-  return projectSchema.parse({
-    id: row.id,
-    repoSlug: row.repo_slug,
-    name: row.name,
-    githubTokenEncrypted: row.github_token_encrypted,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  });
-}
-
-function rowToProjectUser(row: ProjectUserRow): ProjectUser {
-  return projectUserSchema.parse({
-    projectId: row.project_id,
-    userEmail: row.user_email,
-    role: row.role,
-    createdAt: row.created_at,
-  });
-}
-
-function rowToRound(row: RoundRow): Round {
-  return roundSchema.parse({
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    status: row.status,
-    createdByEmail: row.created_by_email,
-    createdByName: row.created_by_name,
-    createdAt: row.created_at,
-    completedAt: row.completed_at,
-    projectId: row.project_id,
-  });
-}
-
-function rowToResult(row: ResultRow): Result {
-  return resultSchema.parse({
-    id: row.id,
-    roundId: row.round_id,
-    testId: row.test_id,
-    status: row.status,
-    testerName: row.tester_name,
-    testerEmail: row.tester_email,
-    description: row.description,
-    severity: row.severity,
-    commitHash: row.commit_hash,
-    issueUrl: row.issue_url,
-    issueNumber: row.issue_number,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    projectId: row.project_id,
-  });
-}
-
-function rowToSession(row: SessionRow): Session {
-  return sessionSchema.parse({
-    id: row.id,
-    userEmail: row.user_email,
-    expiresAt: row.expires_at,
-    createdAt: row.created_at,
-  });
-}
-
-function rowToUser(row: UserRow): User {
-  return userSchema.parse({
-    id: row.id,
-    email: row.email,
-    name: row.name,
-    tokenHash: row.token_hash,
-    role: row.role,
-    invitedBy: row.invited_by,
-    revoked: row.revoked === 1,
-    createdAt: row.created_at,
-  });
-}
-
-function rowToAccessRequest(row: AccessRequestRow): AccessRequest {
-  return accessRequestSchema.parse({
-    id: row.id,
-    email: row.email,
-    name: row.name,
-    status: row.status as AccessRequestStatus,
-    message: row.message,
-    reviewedBy: row.reviewed_by,
-    reviewedAt: row.reviewed_at,
-    createdAt: row.created_at,
-    projectId: row.project_id,
-  });
 }
 
 export class SqliteAdapter implements StorageAdapter {

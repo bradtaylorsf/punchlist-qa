@@ -638,7 +638,7 @@ describe('projects', () => {
     expect(project.githubTokenEncrypted).not.toBeNull();
     expect(project.githubTokenEncrypted).not.toBe('ghp_abc123');
     // The encrypted token should be in iv:authTag:ciphertext format
-    expect(project.githubTokenEncrypted!.split(':')).toHaveLength(3);
+    expect(project.githubTokenEncrypted!.split(':')).toHaveLength(4);
   });
 
   it('enforces unique repo_slug', async () => {
@@ -686,7 +686,7 @@ describe('projects', () => {
 
     const updated = await adapter.updateProject(project.id, { githubToken: 'ghp_new' });
     expect(updated.githubTokenEncrypted).not.toBeNull();
-    expect(updated.githubTokenEncrypted!.split(':')).toHaveLength(3);
+    expect(updated.githubTokenEncrypted!.split(':')).toHaveLength(4);
   });
 
   it('clears project GitHub token with null', async () => {
