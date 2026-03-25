@@ -7,9 +7,9 @@ const createRoundBodySchema = createRoundInputSchema.pick({ name: true, descript
 export function roundsRouter(storageAdapter: StorageAdapter): Router {
   const router = Router();
 
-  router.get('/', async (_req, res, next) => {
+  router.get('/', async (req, res, next) => {
     try {
-      const rounds = await storageAdapter.listRounds();
+      const rounds = await storageAdapter.listRounds(req.project?.id);
       res.json({ success: true, data: rounds });
     } catch (err) {
       next(err);
@@ -24,7 +24,7 @@ export function roundsRouter(storageAdapter: StorageAdapter): Router {
         createdByEmail: req.user!.email,
         createdByName: req.user!.name,
       };
-      const round = await storageAdapter.createRound(input);
+      const round = await storageAdapter.createRound(input, req.project?.id);
       res.status(201).json({ success: true, data: round });
     } catch (err) {
       next(err);

@@ -43,7 +43,7 @@ export function publicAccessRequestRouter(storageAdapter: StorageAdapter): Route
         return;
       }
 
-      const request = await storageAdapter.createAccessRequest(body);
+      const request = await storageAdapter.createAccessRequest(body, req.project?.id);
       res.status(201).json({ success: true, data: request });
     } catch (err) {
       next(err);
@@ -66,7 +66,7 @@ export function adminAccessRequestRouter(
   router.get('/', requireAdmin, async (req, res, next) => {
     try {
       const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-      const requests = await storageAdapter.listAccessRequests(status);
+      const requests = await storageAdapter.listAccessRequests(status, req.project?.id);
       res.json({ success: true, data: requests });
     } catch (err) {
       next(err);

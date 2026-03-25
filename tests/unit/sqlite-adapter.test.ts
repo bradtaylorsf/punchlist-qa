@@ -946,9 +946,10 @@ describe('project-scoped access requests', () => {
     await adapter.createAccessRequest({ email: 'a@a.com', name: 'A' }, projectId);
     await adapter.createAccessRequest({ email: 'b@b.com', name: 'B' }, projectId);
 
-    // Approve one
+    // Approve the first one (a@a.com) by looking it up directly
     const requests = await adapter.listAccessRequests(undefined, projectId);
-    await adapter.updateAccessRequestStatus(requests[0].id, 'approved', 'admin@a.com');
+    const aRequest = requests.find((r) => r.email === 'a@a.com')!;
+    await adapter.updateAccessRequestStatus(aRequest.id, 'approved', 'admin@a.com');
 
     const pending = await adapter.listAccessRequests('pending', projectId);
     expect(pending).toHaveLength(1);

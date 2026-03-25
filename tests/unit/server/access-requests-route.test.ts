@@ -201,7 +201,7 @@ describe('access-requests routes', () => {
       email: 'new@example.com',
       name: 'New Person',
       message: 'Please let me in',
-    });
+    }, undefined);
   });
 
   it('POST /api/access-requests returns 409 for duplicate pending request', async () => {

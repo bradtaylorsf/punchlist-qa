@@ -169,6 +169,7 @@ describe('rounds routes', () => {
         createdByEmail: 'admin@example.com',
         createdByName: 'Admin',
       }),
+      undefined,
     );
   });
 

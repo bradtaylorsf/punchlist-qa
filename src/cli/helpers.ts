@@ -28,7 +28,7 @@ export async function initAdapters(cwd?: string): Promise<{
 
   const dataDir = process.env.PUNCHLIST_DATA_DIR;
   const dbPath = dataDir ? join(dataDir, 'punchlist.db') : join(dir, config.storage.path);
-  const storage = new SqliteAdapter({ dbPath });
+  const storage = new SqliteAdapter({ dbPath, encryptionSecret: config.secrets.authSecret });
   await storage.initialize();
 
   const auth = new TokenAuthAdapter({

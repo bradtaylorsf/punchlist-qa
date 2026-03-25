@@ -12,7 +12,7 @@ export function resultsRouter(storageAdapter: StorageAdapter): Router {
 
   router.get('/:roundId/results', async (req, res, next) => {
     try {
-      const results = await storageAdapter.listResults(req.params.roundId);
+      const results = await storageAdapter.listResults(req.params.roundId, req.project?.id);
       res.json({ success: true, data: results });
     } catch (err) {
       next(err);
@@ -27,7 +27,7 @@ export function resultsRouter(storageAdapter: StorageAdapter): Router {
         testerName: req.user!.name,
         testerEmail: req.user!.email,
       };
-      const result = await storageAdapter.submitResult(req.params.roundId, input);
+      const result = await storageAdapter.submitResult(req.params.roundId, input, req.project?.id);
       res.status(201).json({ success: true, data: result });
     } catch (err) {
       next(err);

@@ -153,7 +153,7 @@ describe('results routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(Array.isArray(res.body.data)).toBe(true);
-    expect(storage.listResults).toHaveBeenCalledWith('round-1');
+    expect(storage.listResults).toHaveBeenCalledWith('round-1', undefined);
   });
 
   it('POST /api/rounds/:roundId/results submits with session identity', async () => {
@@ -178,6 +178,7 @@ describe('results routes', () => {
         testerName: 'Tester',
         testerEmail: 'tester@example.com',
       }),
+      undefined,
     );
   });
 
