@@ -44,7 +44,7 @@ describe('validateConfig', () => {
   });
 
   it('should reject invalid storage type', () => {
-    const config = { ...sampleConfig, storage: { ...sampleConfig.storage, type: 'postgres' } };
+    const config = { ...sampleConfig, storage: { ...sampleConfig.storage, type: 'redis' } };
     const result = validateConfig(config);
     expect(result.valid).toBe(false);
   });

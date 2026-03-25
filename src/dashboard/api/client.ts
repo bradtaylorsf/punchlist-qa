@@ -46,6 +46,25 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return json as T;
 }
 
+// Project scope management
+let activeProjectId: string | null = null;
+
+export function setActiveProject(projectId: string | null) {
+  activeProjectId = projectId;
+}
+
+export function getActiveProjectId(): string | null {
+  return activeProjectId;
+}
+
+// Helper to build project-scoped path (falls back to legacy path when no project)
+function projectPath(path: string): string {
+  if (activeProjectId) {
+    return `/projects/${activeProjectId}${path}`;
+  }
+  return path;
+}
+
 // Auth
 export function login(token: string) {
   return request('/auth/login', {
@@ -117,18 +136,18 @@ export function getConfig() {
 
 // Rounds
 export function listRounds() {
-  return request<{ success: boolean; data: Array<Record<string, unknown>> }>('/rounds');
+  return request<{ success: boolean; data: Array<Record<string, unknown>> }>(projectPath('/rounds'));
 }
 
 export function createRound(input: { name: string; description?: string }) {
-  return request<{ success: boolean; data: Record<string, unknown> }>('/rounds', {
+  return request<{ success: boolean; data: Record<string, unknown> }>(projectPath('/rounds'), {
     method: 'POST',
     body: JSON.stringify(input),
   });
 }
 
 export function updateRound(id: string, input: Record<string, unknown>) {
-  return request<{ success: boolean; data: Record<string, unknown> }>(`/rounds/${id}`, {
+  return request<{ success: boolean; data: Record<string, unknown> }>(projectPath(`/rounds/${id}`), {
     method: 'PUT',
     body: JSON.stringify(input),
   });
@@ -137,7 +156,7 @@ export function updateRound(id: string, input: Record<string, unknown>) {
 // Results
 export function listResults(roundId: string) {
   return request<{ success: boolean; data: Array<Record<string, unknown>> }>(
-    `/rounds/${roundId}/results`,
+    projectPath(`/rounds/${roundId}/results`),
   );
 }
 
@@ -152,7 +171,7 @@ export function submitResult(
   },
 ) {
   return request<{ success: boolean; data: Record<string, unknown> }>(
-    `/rounds/${roundId}/results`,
+    projectPath(`/rounds/${roundId}/results`),
     {
       method: 'POST',
       body: JSON.stringify(input),
@@ -161,14 +180,14 @@ export function submitResult(
 }
 
 export function deleteResult(roundId: string, testId: string) {
-  return request<{ success: boolean; deleted: number }>(`/rounds/${roundId}/results/${testId}`, {
+  return request<{ success: boolean; deleted: number }>(projectPath(`/rounds/${roundId}/results/${testId}`), {
     method: 'DELETE',
   });
 }
 
 export function linkResultIssue(roundId: string, resultId: string, issueUrl: string, issueNumber: number) {
   return request<{ success: boolean; data: Record<string, unknown> }>(
-    `/rounds/${roundId}/results/${resultId}/issue`,
+    projectPath(`/rounds/${roundId}/results/${resultId}/issue`),
     { method: 'PATCH', body: JSON.stringify({ issueUrl, issueNumber }) },
   );
 }
@@ -178,7 +197,7 @@ export function createIssue(opts: Record<string, unknown>) {
   return request<{
     success: boolean;
     data: { url: string; id: string; number: number };
-  }>('/issues', {
+  }>(projectPath('/issues'), {
     method: 'POST',
     body: JSON.stringify(opts),
   });
@@ -188,7 +207,64 @@ export function getOpenIssue(testId: string) {
   return request<{
     success: boolean;
     data: { url: string; number: number; title: string } | null;
-  }>(`/issues/open/${testId}`);
+  }>(projectPath(`/issues/open/${testId}`));
+}
+
+// Projects
+export function listProjects() {
+  return request<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      repoSlug: string;
+      name: string;
+      githubTokenEncrypted: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }>('/projects');
+}
+
+export function createProject(input: { repoSlug: string; name: string; githubToken?: string }) {
+  return request<{ success: boolean; data: Record<string, unknown> }>('/projects', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateProject(id: string, input: { name?: string; githubToken?: string | null }) {
+  return request<{ success: boolean; data: Record<string, unknown> }>(`/projects/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteProject(id: string) {
+  return request<{ success: boolean }>(`/projects/${id}`, { method: 'DELETE' });
+}
+
+export function listProjectUsers(projectId: string) {
+  return request<{
+    success: boolean;
+    data: Array<{ projectId: string; userEmail: string; role: string; createdAt: string }>;
+  }>(`/projects/${projectId}/users`);
+}
+
+export function addProjectUser(projectId: string, email: string, role?: string) {
+  return request<{ success: boolean; data: Record<string, unknown> }>(
+    `/projects/${projectId}/users`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    },
+  );
+}
+
+export function removeProjectUser(projectId: string, email: string) {
+  return request<{ success: boolean }>(
+    `/projects/${projectId}/users/${encodeURIComponent(email)}`,
+    { method: 'DELETE' },
+  );
 }
 
 // Access Requests

@@ -21,6 +21,7 @@ describe('roundSchema', () => {
     createdByName: 'Alice',
     createdAt: '2026-01-01T00:00:00.000Z',
     completedAt: null,
+    projectId: null,
   };
 
   it('accepts a valid round', () => {
@@ -60,6 +61,7 @@ describe('resultSchema', () => {
     issueNumber: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+    projectId: null,
   };
 
   it('accepts a valid result', () => {

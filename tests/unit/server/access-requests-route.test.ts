@@ -41,6 +41,7 @@ const mockAccessRequest = {
   reviewedBy: null,
   reviewedAt: null,
   createdAt: '2024-01-01T00:00:00.000Z',
+  projectId: null,
 };
 
 function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdapter {
@@ -61,6 +62,7 @@ function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdap
     getUserByEmail: vi.fn().mockResolvedValue(null),
     getUserByTokenHash: vi.fn(),
     revokeUser: vi.fn(),
+    updateUserTokenHash: vi.fn(),
     getConfig: vi.fn(),
     setConfig: vi.fn(),
     createSession: vi.fn(),
@@ -73,6 +75,16 @@ function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdap
     getAccessRequest: vi.fn().mockResolvedValue(mockAccessRequest),
     getAccessRequestByEmail: vi.fn().mockResolvedValue(null),
     updateAccessRequestStatus: vi.fn(),
+    createProject: vi.fn(),
+    getProject: vi.fn(),
+    getProjectByRepoSlug: vi.fn(),
+    listProjects: vi.fn(),
+    updateProject: vi.fn(),
+    deleteProject: vi.fn(),
+    addUserToProject: vi.fn(),
+    removeUserFromProject: vi.fn(),
+    listProjectUsers: vi.fn(),
+    listUserProjects: vi.fn(),
     ...overrides,
   };
 }
@@ -189,7 +201,7 @@ describe('access-requests routes', () => {
       email: 'new@example.com',
       name: 'New Person',
       message: 'Please let me in',
-    });
+    }, undefined);
   });
 
   it('POST /api/access-requests returns 409 for duplicate pending request', async () => {

@@ -3,6 +3,7 @@ import type { Express } from 'express';
 import { corsMiddleware } from './middleware/cors.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requireAuth } from './middleware/auth.js';
+import { requireProjectContext, defaultProjectContext } from './middleware/project-context.js';
 import { supportRouter } from './routes/support.js';
 import { widgetServeRouter } from './routes/widget-serve.js';
 import { authRouter } from './routes/auth.js';
@@ -12,18 +13,23 @@ import { configRouter } from './routes/config.js';
 import { issuesRouter } from './routes/issues-api.js';
 import { commitRouter } from './routes/commit.js';
 import { usersRouter } from './routes/users-api.js';
+import { projectsRouter } from './routes/projects.js';
 import {
   publicAccessRequestRouter,
   adminAccessRequestRouter,
 } from './routes/access-requests.js';
 import { dashboardRouter } from './routes/dashboard.js';
 import type { IssueAdapter } from '../adapters/issues/types.js';
+import type { IssueAdapterRegistry } from '../adapters/issues/registry.js';
 import type { StorageAdapter } from '../adapters/storage/types.js';
 import type { AuthAdapter } from '../adapters/auth/types.js';
 import type { PunchlistConfig } from '../shared/types.js';
 
 export interface AppDependencies {
+  /** Legacy single-project issue adapter (used by default project routes) */
   issueAdapter: IssueAdapter;
+  /** Multi-project issue adapter registry (optional, for project-scoped routes) */
+  issueAdapterRegistry?: IssueAdapterRegistry;
   storageAdapter?: StorageAdapter;
   authAdapter?: AuthAdapter;
   config?: PunchlistConfig;
@@ -38,8 +44,15 @@ export function createApp(deps: AppDependencies): Express {
   const app = express();
 
   // Health check — no auth, no CORS, no body parsing
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  app.get('/health', async (_req, res) => {
+    try {
+      if (deps.storageAdapter) {
+        await deps.storageAdapter.getConfig('_health');
+      }
+      res.json({ status: 'ok', database: 'connected', timestamp: new Date().toISOString() });
+    } catch {
+      res.status(503).json({ status: 'unhealthy', database: 'disconnected', timestamp: new Date().toISOString() });
+    }
   });
 
   // Parse JSON bodies (explicit limit to document intent)
@@ -58,14 +71,27 @@ export function createApp(deps: AppDependencies): Express {
   // Protected routes (require valid session)
   if (deps.storageAdapter && deps.authAdapter && deps.config) {
     const auth = requireAuth(deps.authAdapter);
+    const storage = deps.storageAdapter;
+    const defaultProject = defaultProjectContext(storage);
 
-    app.use('/api/rounds', auth, roundsRouter(deps.storageAdapter));
-    app.use('/api/rounds', auth, resultsRouter(deps.storageAdapter));
+    // --- Project CRUD routes ---
+    app.use('/api/projects', auth, projectsRouter(storage));
+
+    // --- Project-scoped data routes ---
+    const projectScope = requireProjectContext(storage);
+    app.use('/api/projects/:projectId/rounds', auth, projectScope, roundsRouter(storage));
+    app.use('/api/projects/:projectId/rounds', auth, projectScope, resultsRouter(storage));
+    app.use('/api/projects/:projectId/issues', auth, projectScope, issuesRouter(deps.issueAdapter));
+    app.use('/api/projects/:projectId/access-requests', auth, projectScope, adminAccessRequestRouter(storage, deps.authAdapter));
+
+    // --- Legacy unscoped routes (backward compat via default project) ---
+    app.use('/api/rounds', auth, defaultProject, roundsRouter(storage));
+    app.use('/api/rounds', auth, defaultProject, resultsRouter(storage));
     app.use('/api/config', auth, configRouter(deps.config));
-    app.use('/api/issues', auth, issuesRouter(deps.issueAdapter));
+    app.use('/api/issues', auth, defaultProject, issuesRouter(deps.issueAdapter));
     app.use('/api/commit', auth, commitRouter());
     app.use('/api/users', auth, usersRouter(deps.authAdapter));
-    app.use('/api/access-requests', auth, adminAccessRequestRouter(deps.storageAdapter, deps.authAdapter));
+    app.use('/api/access-requests', auth, defaultProject, adminAccessRequestRouter(storage, deps.authAdapter));
   }
 
   // Static file serving

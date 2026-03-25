@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useWidget } from '../hooks/useWidget';
+import { ProjectSwitcher } from './ProjectSwitcher';
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -13,6 +14,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-6">
             <span className="font-semibold text-gray-900">Punchlist QA</span>
+            <ProjectSwitcher />
             <div className="flex gap-4">
               <NavLink
                 to="/"
@@ -32,14 +34,24 @@ export function Layout({ children }: { children: ReactNode }) {
                 History
               </NavLink>
               {user?.role === 'admin' && (
-                <NavLink
-                  to="/users"
-                  className={({ isActive }) =>
-                    `text-sm ${isActive ? 'text-blue-600 font-medium' : 'text-gray-600 hover:text-gray-900'}`
-                  }
-                >
-                  Users
-                </NavLink>
+                <>
+                  <NavLink
+                    to="/users"
+                    className={({ isActive }) =>
+                      `text-sm ${isActive ? 'text-blue-600 font-medium' : 'text-gray-600 hover:text-gray-900'}`
+                    }
+                  >
+                    Users
+                  </NavLink>
+                  <NavLink
+                    to="/projects"
+                    className={({ isActive }) =>
+                      `text-sm ${isActive ? 'text-blue-600 font-medium' : 'text-gray-600 hover:text-gray-900'}`
+                    }
+                  >
+                    Projects
+                  </NavLink>
+                </>
               )}
             </div>
           </div>

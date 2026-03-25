@@ -31,6 +31,7 @@ const mockResult = {
   issueNumber: null,
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',
+  projectId: null,
 };
 
 function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdapter {
@@ -64,6 +65,16 @@ function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdap
     getAccessRequest: vi.fn(),
     getAccessRequestByEmail: vi.fn(),
     updateAccessRequestStatus: vi.fn(),
+    createProject: vi.fn(),
+    getProject: vi.fn(),
+    getProjectByRepoSlug: vi.fn(),
+    listProjects: vi.fn(),
+    updateProject: vi.fn(),
+    deleteProject: vi.fn(),
+    addUserToProject: vi.fn(),
+    removeUserFromProject: vi.fn(),
+    listProjectUsers: vi.fn(),
+    listUserProjects: vi.fn(),
     ...overrides,
   };
 }
@@ -142,7 +153,7 @@ describe('results routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(Array.isArray(res.body.data)).toBe(true);
-    expect(storage.listResults).toHaveBeenCalledWith('round-1');
+    expect(storage.listResults).toHaveBeenCalledWith('round-1', undefined);
   });
 
   it('POST /api/rounds/:roundId/results submits with session identity', async () => {
@@ -167,6 +178,7 @@ describe('results routes', () => {
         testerName: 'Tester',
         testerEmail: 'tester@example.com',
       }),
+      undefined,
     );
   });
 

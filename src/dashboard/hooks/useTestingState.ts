@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as api from '../api/client';
+import { useProject } from './useProject';
 
 export interface Round {
   id: string;
@@ -29,13 +30,19 @@ export interface TestResult {
 }
 
 export function useTestingState() {
+  const { currentProject } = useProject();
   const [rounds, setRounds] = useState<Round[]>([]);
   const [activeRound, setActiveRound] = useState<Round | null>(null);
   const [results, setResults] = useState<Map<string, TestResult>>(new Map());
   const [loading, setLoading] = useState(true);
 
-  // Load rounds on mount
+  // Load rounds when project changes
   useEffect(() => {
+    setLoading(true);
+    setRounds([]);
+    setActiveRound(null);
+    setResults(new Map());
+
     api
       .listRounds()
       .then((res) => {
@@ -47,7 +54,7 @@ export function useTestingState() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [currentProject?.id]);
 
   // Load results when active round changes
   useEffect(() => {
