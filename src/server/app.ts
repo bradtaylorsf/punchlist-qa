@@ -44,8 +44,15 @@ export function createApp(deps: AppDependencies): Express {
   const app = express();
 
   // Health check — no auth, no CORS, no body parsing
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  app.get('/health', async (_req, res) => {
+    try {
+      if (deps.storageAdapter) {
+        await deps.storageAdapter.getConfig('_health');
+      }
+      res.json({ status: 'ok', database: 'connected', timestamp: new Date().toISOString() });
+    } catch {
+      res.status(503).json({ status: 'unhealthy', database: 'disconnected', timestamp: new Date().toISOString() });
+    }
   });
 
   // Parse JSON bodies (explicit limit to document intent)

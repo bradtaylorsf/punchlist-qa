@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const commands = ['init', 'serve', 'invite', 'revoke', 'users', 'update-skills'] as const;
+const commands = ['init', 'serve', 'invite', 'revoke', 'users', 'update-skills', 'migrate'] as const;
 type Command = (typeof commands)[number];
 
 function printHelp(): void {
@@ -20,6 +20,7 @@ Commands:
   revoke <email>                Revoke a tester's access
   users                         List all users
   update-skills                 Update AI skills to latest version
+  migrate                       Run database migrations (PostgreSQL)
 
 Options:
   --help, -h        Show this help message
@@ -141,6 +142,11 @@ export async function main(argv: string[]): Promise<void> {
     case 'update-skills': {
       const { updateSkillsCommand } = await import('./commands/update-skills.js');
       await updateSkillsCommand();
+      break;
+    }
+    case 'migrate': {
+      const { migrateCommand } = await import('./commands/migrate.js');
+      await migrateCommand();
       break;
     }
   }

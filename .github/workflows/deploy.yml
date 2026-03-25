@@ -1,0 +1,238 @@
+name: Deploy to ECS Fargate
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  deploy:
+    name: Build, Migrate & Deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      # ------------------------------------------------------------------
+      # 1. Checkout
+      # ------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------
+      # 2. Configure AWS credentials (OIDC)
+      # ------------------------------------------------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ------------------------------------------------------------------
+      # 3. Login to ECR
+      # ------------------------------------------------------------------
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ------------------------------------------------------------------
+      # 4. Build and push Docker image
+      # ------------------------------------------------------------------
+      - name: Build and push image
+        id: build
+        env:
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          IMAGE_URI="${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+          docker build \
+            --file Dockerfile.prod \
+            --tag "${IMAGE_URI}" \
+            --tag "${ECR_REPOSITORY}:latest" \
+            --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --build-arg VERSION="${IMAGE_TAG}" \
+            .
+
+          docker push "${IMAGE_URI}"
+          docker push "${ECR_REPOSITORY}:latest"
+
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------------
+      # 5. Run database migrations via ECS run-task
+      # ------------------------------------------------------------------
+      - name: Run database migrations
+        env:
+          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+        run: |
+          # Fetch the current task definition from the running service
+          TASK_DEF_ARN=$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+
+          # Extract network configuration from the running service
+          SUBNETS=$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.subnets' \
+            --output json)
+
+          SECURITY_GROUPS=$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --query 'services[0].networkConfiguration.awsvpcConfiguration.securityGroups' \
+            --output json)
+
+          # Register a new task definition with the updated image for migration
+          TASK_DEF_JSON=$(aws ecs describe-task-definition \
+            --task-definition "${TASK_DEF_ARN}" \
+            --query 'taskDefinition')
+
+          NEW_TASK_DEF=$(echo "${TASK_DEF_JSON}" | jq \
+            --arg IMAGE "${{ steps.build.outputs.image_uri }}" \
+            '.containerDefinitions[0].image = $IMAGE |
+             .containerDefinitions[0].command = ["node", "bin/punchlist.mjs", "migrate"] |
+             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
+
+          MIGRATION_TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "${NEW_TASK_DEF}" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          # Run migration as a one-off task
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "${ECS_CLUSTER}" \
+            --task-definition "${MIGRATION_TASK_DEF_ARN}" \
+            --launch-type FARGATE \
+            --network-configuration "{\"awsvpcConfiguration\":{\"subnets\":${SUBNETS},\"securityGroups\":${SECURITY_GROUPS},\"assignPublicIp\":\"DISABLED\"}}" \
+            --query 'tasks[0].taskArn' \
+            --output text)
+
+          echo "Waiting for migration task to complete: ${TASK_ARN}"
+          aws ecs wait tasks-stopped \
+            --cluster "${ECS_CLUSTER}" \
+            --tasks "${TASK_ARN}"
+
+          # Check exit code
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster "${ECS_CLUSTER}" \
+            --tasks "${TASK_ARN}" \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text)
+
+          if [ "${EXIT_CODE}" != "0" ]; then
+            echo "::error::Migration failed with exit code ${EXIT_CODE}"
+            # Fetch migration logs for debugging
+            aws logs get-log-events \
+              --log-group-name /ecs/punchlist-qa \
+              --log-stream-name "$(aws ecs describe-tasks \
+                --cluster "${ECS_CLUSTER}" \
+                --tasks "${TASK_ARN}" \
+                --query 'tasks[0].containers[0].runtimeId' \
+                --output text)" \
+              --limit 50 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "Migration completed successfully"
+
+          # Deregister the one-off migration task definition
+          aws ecs deregister-task-definition \
+            --task-definition "${MIGRATION_TASK_DEF_ARN}" > /dev/null
+
+      # ------------------------------------------------------------------
+      # 6. Update ECS service with new image
+      # ------------------------------------------------------------------
+      - name: Update ECS service
+        env:
+          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+        run: |
+          # Fetch current task definition
+          TASK_DEF_ARN=$(aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}" \
+            --query 'services[0].taskDefinition' \
+            --output text)
+
+          TASK_DEF_JSON=$(aws ecs describe-task-definition \
+            --task-definition "${TASK_DEF_ARN}" \
+            --query 'taskDefinition')
+
+          # Update the image in the task definition
+          NEW_TASK_DEF=$(echo "${TASK_DEF_JSON}" | jq \
+            --arg IMAGE "${{ steps.build.outputs.image_uri }}" \
+            '.containerDefinitions[0].image = $IMAGE |
+             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)')
+
+          NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "${NEW_TASK_DEF}" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          # Update the service to use the new task definition
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${ECS_SERVICE}" \
+            --task-definition "${NEW_TASK_DEF_ARN}" \
+            --force-new-deployment \
+            --query 'service.serviceName' \
+            --output text
+
+          echo "Service updated to task definition: ${NEW_TASK_DEF_ARN}"
+
+      # ------------------------------------------------------------------
+      # 7. Wait for service stability
+      # ------------------------------------------------------------------
+      - name: Wait for deployment stability
+        env:
+          ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ secrets.ECS_SERVICE }}
+        run: |
+          echo "Waiting for ECS service to stabilize..."
+          aws ecs wait services-stable \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${ECS_SERVICE}"
+          echo "Service is stable"
+
+      # ------------------------------------------------------------------
+      # 8. Smoke test
+      # ------------------------------------------------------------------
+      - name: Smoke test
+        env:
+          ALB_URL: ${{ secrets.ALB_URL }}
+        run: |
+          echo "Running smoke test against ${ALB_URL}/health"
+
+          MAX_RETRIES=5
+          RETRY_DELAY=10
+
+          for i in $(seq 1 ${MAX_RETRIES}); do
+            HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+              --max-time 10 \
+              "${ALB_URL}/health" || true)
+
+            if [ "${HTTP_STATUS}" = "200" ]; then
+              echo "Smoke test passed (HTTP ${HTTP_STATUS})"
+              exit 0
+            fi
+
+            echo "Attempt ${i}/${MAX_RETRIES}: HTTP ${HTTP_STATUS}, retrying in ${RETRY_DELAY}s..."
+            sleep ${RETRY_DELAY}
+          done
+
+          echo "::error::Smoke test failed after ${MAX_RETRIES} attempts"
+          exit 1
