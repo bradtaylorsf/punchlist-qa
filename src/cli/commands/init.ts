@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, cpSync, readdirSync, readFileSync, appendFileSync } from 'node:fs';
+import { existsSync, mkdirSync, cpSync, readdirSync, readFileSync, appendFileSync, writeFileSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
@@ -15,6 +15,11 @@ import {
 } from '../../shared/constants.js';
 import { GitHubIssueAdapter } from '../../adapters/issues/github.js';
 import type { PunchlistConfig, AIToolChoice } from '../../shared/types.js';
+
+export interface InitOptions {
+  hosted?: boolean;
+  local?: boolean;
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -67,8 +72,86 @@ export function copySkills(platform: 'claude-code' | 'codex', cwd: string): void
   }
 }
 
-export async function initCommand(): Promise<void> {
+async function hostedInit(cwd: string): Promise<void> {
+  console.log('\n  🎯 Punchlist QA — Hosted Mode Setup\n');
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  try {
+    const serverUrl = await ask(rl, '  Hosted server URL (e.g. https://qa.mycompany.com)');
+    if (!serverUrl) {
+      console.error('  Server URL is required.');
+      process.exit(1);
+    }
+
+    // Auto-detect AI tool from project structure
+    const hasClaudeDir = existsSync(join(cwd, '.claude'));
+    const hasCodexDir = existsSync(join(cwd, '.codex')) || existsSync(join(cwd, '.agents'));
+    let detectedAiDefault = '1';
+    if (hasClaudeDir && hasCodexDir) detectedAiDefault = '3';
+    else if (hasCodexDir) detectedAiDefault = '2';
+
+    console.log('\n  AI tool integration:');
+    console.log('  1) Claude Code');
+    console.log('  2) Codex');
+    console.log('  3) Both');
+    console.log('  4) None\n');
+    const aiChoice = await ask(rl, '  Choose (1/2/3/4)', detectedAiDefault);
+    const aiToolMap: Record<string, AIToolChoice> = {
+      '1': 'claude-code',
+      '2': 'codex',
+      '3': 'both',
+      '4': 'none',
+    };
+    const aiTool = aiToolMap[aiChoice] || 'claude-code';
+
+    rl.close();
+
+    // Write minimal hosted config
+    const hostedConfig = { serverUrl, aiTool };
+    const hostedDir = join(cwd, '.punchlist');
+    mkdirSync(hostedDir, { recursive: true });
+    writeFileSync(
+      join(hostedDir, 'hosted.json'),
+      JSON.stringify(hostedConfig, null, 2) + '\n',
+    );
+    console.log('\n  ✅ Created .punchlist/hosted.json');
+
+    // Copy AI skills
+    if (aiTool !== 'none') {
+      const platforms: Array<'claude-code' | 'codex'> =
+        aiTool === 'both' ? ['claude-code', 'codex'] : [aiTool as 'claude-code' | 'codex'];
+      for (const platform of platforms) {
+        copySkills(platform, cwd);
+      }
+    }
+
+    // Output widget snippet
+    const cleanUrl = serverUrl.replace(/\/+$/, '');
+    console.log('\n  📋 Add this script tag to your app:\n');
+    console.log(`  <script src="${cleanUrl}/widget.js"></script>\n`);
+
+    // Next steps
+    console.log('  📝 Next steps:');
+    console.log('  1. Add the widget script tag to your HTML');
+    console.log('  2. Use AI skills to generate test cases');
+    console.log('  3. Start testing at your hosted dashboard\n');
+  } catch (err) {
+    rl.close();
+    throw err;
+  }
+}
+
+export async function initCommand(options: InitOptions = {}): Promise<void> {
   const cwd = process.cwd();
+
+  // Hosted mode (default when --local is not specified)
+  if (options.hosted && !options.local) {
+    await hostedInit(cwd);
+    return;
+  }
+
+  // Local mode (original behavior)
   const configPath = join(cwd, CONFIG_FILENAME);
 
   if (existsSync(configPath)) {

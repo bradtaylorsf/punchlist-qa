@@ -14,7 +14,7 @@ Usage:
   punchlist-qa <command> [options]
 
 Commands:
-  init                          Initialize Punchlist QA in a project
+  init [--hosted|--local]       Initialize Punchlist QA in a project
   serve                         Start the QA dashboard server
   invite <email> --name <name>  Generate a tester invite link
   revoke <email>                Revoke a tester's access
@@ -51,6 +51,8 @@ export async function main(argv: string[]): Promise<void> {
       name: { type: 'string' },
       role: { type: 'string' },
       'base-url': { type: 'string' },
+      hosted: { type: 'boolean', default: false },
+      local: { type: 'boolean', default: false },
     },
     allowPositionals: true,
     strict: false,
@@ -91,7 +93,10 @@ export async function main(argv: string[]): Promise<void> {
   switch (command) {
     case 'init': {
       const { initCommand } = await import('./commands/init.js');
-      await initCommand();
+      await initCommand({
+        hosted: values.hosted as boolean,
+        local: values.local as boolean,
+      });
       break;
     }
     case 'serve': {
