@@ -26,6 +26,7 @@ const mockRound = {
   createdByName: 'Admin',
   createdAt: '2024-01-01T00:00:00.000Z',
   completedAt: null,
+  projectId: null,
 };
 
 function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdapter {
@@ -59,6 +60,16 @@ function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdap
     getAccessRequest: vi.fn(),
     getAccessRequestByEmail: vi.fn(),
     updateAccessRequestStatus: vi.fn(),
+    createProject: vi.fn(),
+    getProject: vi.fn(),
+    getProjectByRepoSlug: vi.fn(),
+    listProjects: vi.fn(),
+    updateProject: vi.fn(),
+    deleteProject: vi.fn(),
+    addUserToProject: vi.fn(),
+    removeUserFromProject: vi.fn(),
+    listProjectUsers: vi.fn(),
+    listUserProjects: vi.fn(),
     ...overrides,
   };
 }

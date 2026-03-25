@@ -87,6 +87,33 @@ export const testerSchema = z.object({
 
 // --- Storage domain schemas (DB models, distinct from config-file schemas) ---
 
+export const projectSchema = z.object({
+  id: z.string().uuid(),
+  repoSlug: z.string().min(1),
+  name: z.string().min(1),
+  githubTokenEncrypted: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const projectUserSchema = z.object({
+  projectId: z.string().uuid(),
+  userEmail: z.string().email(),
+  role: userRoleSchema,
+  createdAt: z.string(),
+});
+
+export const createProjectInputSchema = z.object({
+  repoSlug: z.string().min(1),
+  name: z.string().min(1),
+  githubToken: z.string().optional(),
+});
+
+export const updateProjectInputSchema = z.object({
+  name: z.string().min(1).optional(),
+  githubToken: z.string().nullable().optional(),
+});
+
 export const roundSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -96,6 +123,7 @@ export const roundSchema = z.object({
   createdByName: z.string(),
   createdAt: z.string(),
   completedAt: z.string().nullable(),
+  projectId: z.string().uuid().nullable(),
 });
 
 export const resultSchema = z.object({
@@ -112,6 +140,7 @@ export const resultSchema = z.object({
   issueNumber: z.number().int().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  projectId: z.string().uuid().nullable(),
 });
 
 export const userSchema = z.object({
@@ -270,6 +299,7 @@ export const accessRequestSchema = z.object({
   reviewedBy: z.string().email().nullable(),
   reviewedAt: z.string().nullable(),
   createdAt: z.string(),
+  projectId: z.string().uuid().nullable(),
 });
 
 export const createAccessRequestInputSchema = z.object({
@@ -390,3 +420,7 @@ export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type AccessRequestStatus = z.infer<typeof accessRequestStatusSchema>;
 export type AccessRequest = z.infer<typeof accessRequestSchema>;
 export type CreateAccessRequestInput = z.infer<typeof createAccessRequestInputSchema>;
+export type Project = z.infer<typeof projectSchema>;
+export type ProjectUser = z.infer<typeof projectUserSchema>;
+export type CreateProjectInput = z.infer<typeof createProjectInputSchema>;
+export type UpdateProjectInput = z.infer<typeof updateProjectInputSchema>;

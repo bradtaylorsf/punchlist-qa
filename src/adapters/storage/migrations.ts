@@ -93,6 +93,40 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_access_requests_status ON access_requests(status);
     `,
   },
+  {
+    version: 4,
+    description: 'Create projects and project_users tables, add project_id to scoped tables',
+    up: `
+      CREATE TABLE projects (
+        id TEXT PRIMARY KEY,
+        repo_slug TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        github_token_encrypted TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_projects_repo_slug ON projects(repo_slug);
+
+      CREATE TABLE project_users (
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_email TEXT NOT NULL REFERENCES users(email),
+        role TEXT NOT NULL DEFAULT 'tester',
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (project_id, user_email)
+      );
+
+      CREATE INDEX idx_project_users_user_email ON project_users(user_email);
+
+      ALTER TABLE rounds ADD COLUMN project_id TEXT REFERENCES projects(id);
+      ALTER TABLE results ADD COLUMN project_id TEXT REFERENCES projects(id);
+      ALTER TABLE access_requests ADD COLUMN project_id TEXT REFERENCES projects(id);
+
+      CREATE INDEX idx_rounds_project_id ON rounds(project_id);
+      CREATE INDEX idx_results_project_id ON results(project_id);
+      CREATE INDEX idx_access_requests_project_id ON access_requests(project_id);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

@@ -4,11 +4,15 @@ import type {
   User,
   Session,
   AccessRequest,
+  Project,
+  ProjectUser,
   CreateRoundInput,
   UpdateRoundInput,
   SubmitResultInput,
   CreateUserInput,
   CreateAccessRequestInput,
+  CreateProjectInput,
+  UpdateProjectInput,
 } from '../../shared/types.js';
 
 export interface StorageAdapter {
@@ -18,13 +22,47 @@ export interface StorageAdapter {
   /** Close the storage connection */
   close(): Promise<void>;
 
+  // --- Projects ---
+
+  /** Create a new project */
+  createProject(input: CreateProjectInput): Promise<Project>;
+
+  /** Get a project by ID, or null if not found */
+  getProject(id: string): Promise<Project | null>;
+
+  /** Get a project by repo slug, or null if not found */
+  getProjectByRepoSlug(repoSlug: string): Promise<Project | null>;
+
+  /** List all projects */
+  listProjects(): Promise<Project[]>;
+
+  /** Update a project's mutable fields */
+  updateProject(id: string, input: UpdateProjectInput): Promise<Project>;
+
+  /** Delete a project by ID (idempotent) */
+  deleteProject(id: string): Promise<void>;
+
+  // --- Project Users ---
+
+  /** Add a user to a project */
+  addUserToProject(projectId: string, userEmail: string, role?: string): Promise<ProjectUser>;
+
+  /** Remove a user from a project (idempotent) */
+  removeUserFromProject(projectId: string, userEmail: string): Promise<void>;
+
+  /** List all users in a project */
+  listProjectUsers(projectId: string): Promise<ProjectUser[]>;
+
+  /** List all projects a user has access to */
+  listUserProjects(userEmail: string): Promise<Project[]>;
+
   // --- Rounds ---
 
   /** Create a new QA round */
-  createRound(input: CreateRoundInput): Promise<Round>;
+  createRound(input: CreateRoundInput, projectId?: string): Promise<Round>;
 
-  /** List all rounds, ordered by creation date descending */
-  listRounds(): Promise<Round[]>;
+  /** List all rounds, ordered by creation date descending. If projectId is provided, filter by project. */
+  listRounds(projectId?: string): Promise<Round[]>;
 
   /** Get a single round by ID, or null if not found */
   getRound(id: string): Promise<Round | null>;
@@ -35,10 +73,10 @@ export interface StorageAdapter {
   // --- Results ---
 
   /** Submit a test result (insert or replace if same round+test combo exists) */
-  submitResult(roundId: string, input: SubmitResultInput): Promise<Result>;
+  submitResult(roundId: string, input: SubmitResultInput, projectId?: string): Promise<Result>;
 
   /** List all results for a given round */
-  listResults(roundId: string): Promise<Result[]>;
+  listResults(roundId: string, projectId?: string): Promise<Result[]>;
 
   /** Delete a single result by ID */
   deleteResult(id: string): Promise<void>;
@@ -97,10 +135,10 @@ export interface StorageAdapter {
   // --- Access Requests ---
 
   /** Create an access request */
-  createAccessRequest(input: CreateAccessRequestInput): Promise<AccessRequest>;
+  createAccessRequest(input: CreateAccessRequestInput, projectId?: string): Promise<AccessRequest>;
 
   /** List access requests, optionally filtered by status */
-  listAccessRequests(status?: string): Promise<AccessRequest[]>;
+  listAccessRequests(status?: string, projectId?: string): Promise<AccessRequest[]>;
 
   /** Get access request by ID */
   getAccessRequest(id: string): Promise<AccessRequest | null>;

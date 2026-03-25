@@ -4,12 +4,17 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { SqliteAdapter } from '../../src/adapters/storage/sqlite-adapter.js';
 
+const ENCRYPTION_SECRET = 'test-encryption-secret-for-sqlite-adapter';
+
 let adapter: SqliteAdapter;
 let tmpDir: string;
 
 beforeEach(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'punchlist-test-'));
-  adapter = new SqliteAdapter({ dbPath: join(tmpDir, 'test.db') });
+  adapter = new SqliteAdapter({
+    dbPath: join(tmpDir, 'test.db'),
+    encryptionSecret: ENCRYPTION_SECRET,
+  });
   await adapter.initialize();
 });
 
@@ -600,5 +605,353 @@ describe('config', () => {
     await adapter.setConfig('theme', 'dark');
     await adapter.setConfig('theme', 'light');
     expect(await adapter.getConfig('theme')).toBe('light');
+  });
+});
+
+// --- Projects ---
+
+describe('projects', () => {
+  it('creates and retrieves a project', async () => {
+    const project = await adapter.createProject({
+      repoSlug: 'owner/repo',
+      name: 'My Project',
+    });
+
+    expect(project.repoSlug).toBe('owner/repo');
+    expect(project.name).toBe('My Project');
+    expect(project.githubTokenEncrypted).toBeNull();
+    expect(project.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(project.createdAt).toBeDefined();
+    expect(project.updatedAt).toBeDefined();
+
+    const fetched = await adapter.getProject(project.id);
+    expect(fetched).toEqual(project);
+  });
+
+  it('creates project with encrypted GitHub token', async () => {
+    const project = await adapter.createProject({
+      repoSlug: 'owner/repo',
+      name: 'My Project',
+      githubToken: 'ghp_abc123',
+    });
+
+    expect(project.githubTokenEncrypted).not.toBeNull();
+    expect(project.githubTokenEncrypted).not.toBe('ghp_abc123');
+    // The encrypted token should be in iv:authTag:ciphertext format
+    expect(project.githubTokenEncrypted!.split(':')).toHaveLength(3);
+  });
+
+  it('enforces unique repo_slug', async () => {
+    await adapter.createProject({ repoSlug: 'owner/repo', name: 'P1' });
+    await expect(
+      adapter.createProject({ repoSlug: 'owner/repo', name: 'P2' }),
+    ).rejects.toThrow();
+  });
+
+  it('lists projects ordered by creation date descending', async () => {
+    await adapter.createProject({ repoSlug: 'owner/first', name: 'First' });
+    await adapter.createProject({ repoSlug: 'owner/second', name: 'Second' });
+
+    const projects = await adapter.listProjects();
+    expect(projects).toHaveLength(2);
+    expect(projects[0].name).toBe('Second');
+    expect(projects[1].name).toBe('First');
+  });
+
+  it('returns null for non-existent project', async () => {
+    expect(await adapter.getProject('00000000-0000-0000-0000-000000000000')).toBeNull();
+  });
+
+  it('finds project by repo slug', async () => {
+    await adapter.createProject({ repoSlug: 'owner/repo', name: 'P1' });
+
+    const found = await adapter.getProjectByRepoSlug('owner/repo');
+    expect(found?.name).toBe('P1');
+
+    const notFound = await adapter.getProjectByRepoSlug('owner/nonexistent');
+    expect(notFound).toBeNull();
+  });
+
+  it('updates project name', async () => {
+    const project = await adapter.createProject({ repoSlug: 'owner/repo', name: 'Original' });
+
+    const updated = await adapter.updateProject(project.id, { name: 'Renamed' });
+    expect(updated.name).toBe('Renamed');
+    expect(updated.repoSlug).toBe('owner/repo');
+  });
+
+  it('updates project GitHub token', async () => {
+    const project = await adapter.createProject({ repoSlug: 'owner/repo', name: 'P1' });
+    expect(project.githubTokenEncrypted).toBeNull();
+
+    const updated = await adapter.updateProject(project.id, { githubToken: 'ghp_new' });
+    expect(updated.githubTokenEncrypted).not.toBeNull();
+    expect(updated.githubTokenEncrypted!.split(':')).toHaveLength(3);
+  });
+
+  it('clears project GitHub token with null', async () => {
+    const project = await adapter.createProject({
+      repoSlug: 'owner/repo',
+      name: 'P1',
+      githubToken: 'ghp_abc',
+    });
+    expect(project.githubTokenEncrypted).not.toBeNull();
+
+    const updated = await adapter.updateProject(project.id, { githubToken: null });
+    expect(updated.githubTokenEncrypted).toBeNull();
+  });
+
+  it('throws when updating non-existent project', async () => {
+    await expect(
+      adapter.updateProject('00000000-0000-0000-0000-000000000000', { name: 'X' }),
+    ).rejects.toThrow('Project not found');
+  });
+
+  it('throws when updating non-existent project with empty object', async () => {
+    await expect(
+      adapter.updateProject('00000000-0000-0000-0000-000000000000', {}),
+    ).rejects.toThrow('Project not found');
+  });
+
+  it('deletes a project (idempotent)', async () => {
+    const project = await adapter.createProject({ repoSlug: 'owner/repo', name: 'P1' });
+
+    await adapter.deleteProject(project.id);
+    expect(await adapter.getProject(project.id)).toBeNull();
+
+    // Idempotent — no error on second delete
+    await expect(adapter.deleteProject(project.id)).resolves.toBeUndefined();
+  });
+});
+
+// --- Project Users ---
+
+describe('project users', () => {
+  let projectId: string;
+
+  beforeEach(async () => {
+    const project = await adapter.createProject({ repoSlug: 'owner/repo', name: 'P1' });
+    projectId = project.id;
+    await adapter.createUser({
+      email: 'alice@a.com',
+      name: 'Alice',
+      tokenHash: 'h1',
+      role: 'tester',
+      invitedBy: 'admin@a.com',
+    });
+    await adapter.createUser({
+      email: 'bob@b.com',
+      name: 'Bob',
+      tokenHash: 'h2',
+      role: 'admin',
+      invitedBy: 'admin@a.com',
+    });
+  });
+
+  it('adds a user to a project', async () => {
+    const pu = await adapter.addUserToProject(projectId, 'alice@a.com', 'tester');
+    expect(pu.projectId).toBe(projectId);
+    expect(pu.userEmail).toBe('alice@a.com');
+    expect(pu.role).toBe('tester');
+  });
+
+  it('defaults role to tester', async () => {
+    const pu = await adapter.addUserToProject(projectId, 'alice@a.com');
+    expect(pu.role).toBe('tester');
+  });
+
+  it('removes a user from a project (idempotent)', async () => {
+    await adapter.addUserToProject(projectId, 'alice@a.com');
+    await adapter.removeUserFromProject(projectId, 'alice@a.com');
+
+    const users = await adapter.listProjectUsers(projectId);
+    expect(users).toHaveLength(0);
+
+    // Idempotent
+    await expect(
+      adapter.removeUserFromProject(projectId, 'alice@a.com'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('lists project users', async () => {
+    await adapter.addUserToProject(projectId, 'alice@a.com', 'tester');
+    await adapter.addUserToProject(projectId, 'bob@b.com', 'admin');
+
+    const users = await adapter.listProjectUsers(projectId);
+    expect(users).toHaveLength(2);
+    expect(users.map((u) => u.userEmail).sort()).toEqual(['alice@a.com', 'bob@b.com']);
+  });
+
+  it('lists user projects via JOIN', async () => {
+    const project2 = await adapter.createProject({ repoSlug: 'owner/repo2', name: 'P2' });
+    await adapter.addUserToProject(projectId, 'alice@a.com');
+    await adapter.addUserToProject(project2.id, 'alice@a.com');
+
+    const projects = await adapter.listUserProjects('alice@a.com');
+    expect(projects).toHaveLength(2);
+  });
+
+  it('prevents duplicate membership', async () => {
+    await adapter.addUserToProject(projectId, 'alice@a.com');
+    await expect(
+      adapter.addUserToProject(projectId, 'alice@a.com'),
+    ).rejects.toThrow();
+  });
+
+  it('cascade deletes memberships when project is deleted', async () => {
+    await adapter.addUserToProject(projectId, 'alice@a.com');
+    await adapter.addUserToProject(projectId, 'bob@b.com');
+
+    await adapter.deleteProject(projectId);
+
+    // Verify memberships are gone
+    const users = await adapter.listProjectUsers(projectId);
+    expect(users).toHaveLength(0);
+  });
+});
+
+// --- Project-scoped rounds ---
+
+describe('project-scoped rounds', () => {
+  let projectAId: string;
+  let projectBId: string;
+
+  beforeEach(async () => {
+    const a = await adapter.createProject({ repoSlug: 'owner/a', name: 'A' });
+    const b = await adapter.createProject({ repoSlug: 'owner/b', name: 'B' });
+    projectAId = a.id;
+    projectBId = b.id;
+  });
+
+  it('creates round with projectId', async () => {
+    const round = await adapter.createRound(
+      { name: 'R1', createdByEmail: 'a@b.com', createdByName: 'A' },
+      projectAId,
+    );
+    expect(round.projectId).toBe(projectAId);
+  });
+
+  it('creates round without projectId (backward compat)', async () => {
+    const round = await adapter.createRound({
+      name: 'R1',
+      createdByEmail: 'a@b.com',
+      createdByName: 'A',
+    });
+    expect(round.projectId).toBeNull();
+  });
+
+  it('filters rounds by projectId', async () => {
+    await adapter.createRound(
+      { name: 'A1', createdByEmail: 'a@b.com', createdByName: 'A' },
+      projectAId,
+    );
+    await adapter.createRound(
+      { name: 'B1', createdByEmail: 'a@b.com', createdByName: 'A' },
+      projectBId,
+    );
+    await adapter.createRound({ name: 'NoProject', createdByEmail: 'a@b.com', createdByName: 'A' });
+
+    const projectARounds = await adapter.listRounds(projectAId);
+    expect(projectARounds).toHaveLength(1);
+    expect(projectARounds[0].name).toBe('A1');
+
+    const projectBRounds = await adapter.listRounds(projectBId);
+    expect(projectBRounds).toHaveLength(1);
+    expect(projectBRounds[0].name).toBe('B1');
+  });
+
+  it('returns all rounds when no projectId specified', async () => {
+    await adapter.createRound(
+      { name: 'A1', createdByEmail: 'a@b.com', createdByName: 'A' },
+      projectAId,
+    );
+    await adapter.createRound(
+      { name: 'B1', createdByEmail: 'a@b.com', createdByName: 'A' },
+      projectBId,
+    );
+    await adapter.createRound({ name: 'NoProject', createdByEmail: 'a@b.com', createdByName: 'A' });
+
+    const allRounds = await adapter.listRounds();
+    expect(allRounds).toHaveLength(3);
+  });
+});
+
+// --- Project-scoped results ---
+
+describe('project-scoped results', () => {
+  let projectId: string;
+  let roundId: string;
+
+  beforeEach(async () => {
+    const project = await adapter.createProject({ repoSlug: 'owner/repo', name: 'P1' });
+    projectId = project.id;
+    const round = await adapter.createRound(
+      { name: 'R1', createdByEmail: 'a@b.com', createdByName: 'A' },
+      projectId,
+    );
+    roundId = round.id;
+  });
+
+  it('stores projectId on result', async () => {
+    const result = await adapter.submitResult(
+      roundId,
+      { testId: 'auth-001', status: 'pass', testerName: 'B', testerEmail: 'b@b.com' },
+      projectId,
+    );
+    expect(result.projectId).toBe(projectId);
+  });
+
+  it('stores null projectId when not provided', async () => {
+    const result = await adapter.submitResult(roundId, {
+      testId: 'auth-001',
+      status: 'pass',
+      testerName: 'B',
+      testerEmail: 'b@b.com',
+    });
+    expect(result.projectId).toBeNull();
+  });
+});
+
+// --- Project-scoped access requests ---
+
+describe('project-scoped access requests', () => {
+  let projectId: string;
+
+  beforeEach(async () => {
+    const project = await adapter.createProject({ repoSlug: 'owner/repo', name: 'P1' });
+    projectId = project.id;
+  });
+
+  it('creates access request with projectId', async () => {
+    const req = await adapter.createAccessRequest(
+      { email: 'user@a.com', name: 'User' },
+      projectId,
+    );
+    expect(req.projectId).toBe(projectId);
+  });
+
+  it('filters access requests by projectId', async () => {
+    await adapter.createAccessRequest({ email: 'a@a.com', name: 'A' }, projectId);
+    await adapter.createAccessRequest({ email: 'b@b.com', name: 'B' });
+
+    const projectRequests = await adapter.listAccessRequests(undefined, projectId);
+    expect(projectRequests).toHaveLength(1);
+    expect(projectRequests[0].email).toBe('a@a.com');
+
+    const allRequests = await adapter.listAccessRequests();
+    expect(allRequests).toHaveLength(2);
+  });
+
+  it('filters access requests by both status and projectId', async () => {
+    await adapter.createAccessRequest({ email: 'a@a.com', name: 'A' }, projectId);
+    await adapter.createAccessRequest({ email: 'b@b.com', name: 'B' }, projectId);
+
+    // Approve one
+    const requests = await adapter.listAccessRequests(undefined, projectId);
+    await adapter.updateAccessRequestStatus(requests[0].id, 'approved', 'admin@a.com');
+
+    const pending = await adapter.listAccessRequests('pending', projectId);
+    expect(pending).toHaveLength(1);
+    expect(pending[0].email).toBe('b@b.com');
   });
 });

@@ -37,4 +37,8 @@ export type {
   AccessRequestStatus,
   AccessRequest,
   CreateAccessRequestInput,
+  Project,
+  ProjectUser,
+  CreateProjectInput,
+  UpdateProjectInput,
 } from './schemas.js';

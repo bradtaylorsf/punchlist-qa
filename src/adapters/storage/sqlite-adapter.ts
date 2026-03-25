@@ -10,6 +10,8 @@ import {
   userSchema,
   sessionSchema,
   accessRequestSchema,
+  projectSchema,
+  projectUserSchema,
 } from '../../shared/schemas.js';
 import type {
   Round,
@@ -18,18 +20,40 @@ import type {
   Session,
   AccessRequest,
   AccessRequestStatus,
+  Project,
+  ProjectUser,
   CreateRoundInput,
   UpdateRoundInput,
   SubmitResultInput,
   CreateUserInput,
   CreateAccessRequestInput,
+  CreateProjectInput,
+  UpdateProjectInput,
 } from '../../shared/types.js';
+import { encrypt } from '../../shared/encryption.js';
 
 interface SqliteAdapterOptions {
   dbPath?: string;
+  encryptionSecret?: string;
 }
 
 // Row types (snake_case from SQLite)
+interface ProjectRow {
+  id: string;
+  repo_slug: string;
+  name: string;
+  github_token_encrypted: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ProjectUserRow {
+  project_id: string;
+  user_email: string;
+  role: string;
+  created_at: string;
+}
+
 interface RoundRow {
   id: string;
   name: string;
@@ -39,6 +63,7 @@ interface RoundRow {
   created_by_name: string;
   created_at: string;
   completed_at: string | null;
+  project_id: string | null;
 }
 
 interface ResultRow {
@@ -55,6 +80,7 @@ interface ResultRow {
   issue_number: number | null;
   created_at: string;
   updated_at: string;
+  project_id: string | null;
 }
 
 interface SessionRow {
@@ -84,6 +110,27 @@ interface AccessRequestRow {
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string;
+  project_id: string | null;
+}
+
+function rowToProject(row: ProjectRow): Project {
+  return projectSchema.parse({
+    id: row.id,
+    repoSlug: row.repo_slug,
+    name: row.name,
+    githubTokenEncrypted: row.github_token_encrypted,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+}
+
+function rowToProjectUser(row: ProjectUserRow): ProjectUser {
+  return projectUserSchema.parse({
+    projectId: row.project_id,
+    userEmail: row.user_email,
+    role: row.role,
+    createdAt: row.created_at,
+  });
 }
 
 function rowToRound(row: RoundRow): Round {
@@ -96,6 +143,7 @@ function rowToRound(row: RoundRow): Round {
     createdByName: row.created_by_name,
     createdAt: row.created_at,
     completedAt: row.completed_at,
+    projectId: row.project_id,
   });
 }
 
@@ -114,6 +162,7 @@ function rowToResult(row: ResultRow): Result {
     issueNumber: row.issue_number,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    projectId: row.project_id,
   });
 }
 
@@ -149,15 +198,18 @@ function rowToAccessRequest(row: AccessRequestRow): AccessRequest {
     reviewedBy: row.reviewed_by,
     reviewedAt: row.reviewed_at,
     createdAt: row.created_at,
+    projectId: row.project_id,
   });
 }
 
 export class SqliteAdapter implements StorageAdapter {
   private db: Database.Database | null = null;
   private readonly dbPath: string;
+  private readonly encryptionSecret?: string;
 
   constructor(options: SqliteAdapterOptions = {}) {
     this.dbPath = options.dbPath ?? '.punchlist/punchlist.db';
+    this.encryptionSecret = options.encryptionSecret;
   }
 
   async initialize(): Promise<void> {
@@ -173,15 +225,129 @@ export class SqliteAdapter implements StorageAdapter {
     this.db = null;
   }
 
+  // --- Projects ---
+
+  async createProject(input: CreateProjectInput): Promise<Project> {
+    const db = this.getDb();
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const encryptedToken = input.githubToken
+      ? encrypt(input.githubToken, this.requireEncryptionSecret())
+      : null;
+    db.prepare(
+      `INSERT INTO projects (id, repo_slug, name, github_token_encrypted, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(id, input.repoSlug, input.name, encryptedToken, now, now);
+    const row = db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as ProjectRow;
+    return rowToProject(row);
+  }
+
+  async getProject(id: string): Promise<Project | null> {
+    const row = this.getDb().prepare('SELECT * FROM projects WHERE id = ?').get(id) as
+      | ProjectRow
+      | undefined;
+    return row ? rowToProject(row) : null;
+  }
+
+  async getProjectByRepoSlug(repoSlug: string): Promise<Project | null> {
+    const row = this.getDb().prepare('SELECT * FROM projects WHERE repo_slug = ?').get(repoSlug) as
+      | ProjectRow
+      | undefined;
+    return row ? rowToProject(row) : null;
+  }
+
+  async listProjects(): Promise<Project[]> {
+    const rows = this.getDb()
+      .prepare('SELECT * FROM projects ORDER BY rowid DESC')
+      .all() as ProjectRow[];
+    return rows.map(rowToProject);
+  }
+
+  async updateProject(id: string, input: UpdateProjectInput): Promise<Project> {
+    const db = this.getDb();
+    const sets: string[] = [];
+    const values: unknown[] = [];
+
+    if (input.name !== undefined) {
+      sets.push('name = ?');
+      values.push(input.name);
+    }
+    if (input.githubToken !== undefined) {
+      sets.push('github_token_encrypted = ?');
+      values.push(
+        input.githubToken !== null
+          ? encrypt(input.githubToken, this.requireEncryptionSecret())
+          : null,
+      );
+    }
+
+    if (sets.length > 0) {
+      sets.push('updated_at = ?');
+      values.push(new Date().toISOString());
+      values.push(id);
+      const result = db.prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+      if (result.changes === 0) throw new Error('Project not found');
+    } else {
+      const existing = await this.getProject(id);
+      if (!existing) throw new Error('Project not found');
+    }
+
+    return (await this.getProject(id))!;
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    this.getDb().prepare('DELETE FROM projects WHERE id = ?').run(id);
+  }
+
+  // --- Project Users ---
+
+  async addUserToProject(projectId: string, userEmail: string, role?: string): Promise<ProjectUser> {
+    const db = this.getDb();
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO project_users (project_id, user_email, role, created_at)
+       VALUES (?, ?, ?, ?)`,
+    ).run(projectId, userEmail, role ?? 'tester', now);
+    const row = db
+      .prepare('SELECT * FROM project_users WHERE project_id = ? AND user_email = ?')
+      .get(projectId, userEmail) as ProjectUserRow;
+    return rowToProjectUser(row);
+  }
+
+  async removeUserFromProject(projectId: string, userEmail: string): Promise<void> {
+    this.getDb()
+      .prepare('DELETE FROM project_users WHERE project_id = ? AND user_email = ?')
+      .run(projectId, userEmail);
+  }
+
+  async listProjectUsers(projectId: string): Promise<ProjectUser[]> {
+    const rows = this.getDb()
+      .prepare('SELECT * FROM project_users WHERE project_id = ? ORDER BY created_at ASC')
+      .all(projectId) as ProjectUserRow[];
+    return rows.map(rowToProjectUser);
+  }
+
+  async listUserProjects(userEmail: string): Promise<Project[]> {
+    const rows = this.getDb()
+      .prepare(
+        `SELECT p.* FROM projects p
+         JOIN project_users pu ON p.id = pu.project_id
+         WHERE pu.user_email = ?
+         ORDER BY p.created_at DESC`,
+      )
+      .all(userEmail) as ProjectRow[];
+    return rows.map(rowToProject);
+  }
+
   // --- Rounds ---
 
-  async createRound(input: CreateRoundInput): Promise<Round> {
+  async createRound(input: CreateRoundInput, projectId?: string): Promise<Round> {
     const db = this.getDb();
     const id = randomUUID();
     const now = new Date().toISOString();
     db.prepare(
-      `INSERT INTO rounds (id, name, description, status, created_by_email, created_by_name, created_at, completed_at)
-       VALUES (?, ?, ?, 'active', ?, ?, ?, NULL)`,
+      `INSERT INTO rounds (id, name, description, status, created_by_email, created_by_name, created_at, completed_at, project_id)
+       VALUES (?, ?, ?, 'active', ?, ?, ?, NULL, ?)`,
     ).run(
       id,
       input.name,
@@ -189,12 +355,20 @@ export class SqliteAdapter implements StorageAdapter {
       input.createdByEmail,
       input.createdByName,
       now,
+      projectId ?? null,
     );
     return (await this.getRound(id))!;
   }
 
-  async listRounds(): Promise<Round[]> {
-    const rows = this.getDb()
+  async listRounds(projectId?: string): Promise<Round[]> {
+    const db = this.getDb();
+    if (projectId !== undefined) {
+      const rows = db
+        .prepare('SELECT * FROM rounds WHERE project_id = ? ORDER BY rowid DESC')
+        .all(projectId) as RoundRow[];
+      return rows.map(rowToRound);
+    }
+    const rows = db
       .prepare('SELECT * FROM rounds ORDER BY rowid DESC')
       .all() as RoundRow[];
     return rows.map(rowToRound);
@@ -243,7 +417,7 @@ export class SqliteAdapter implements StorageAdapter {
 
   // --- Results ---
 
-  async submitResult(roundId: string, input: SubmitResultInput): Promise<Result> {
+  async submitResult(roundId: string, input: SubmitResultInput, projectId?: string): Promise<Result> {
     const db = this.getDb();
     const now = new Date().toISOString();
 
@@ -265,8 +439,8 @@ export class SqliteAdapter implements StorageAdapter {
     const createdAt = existing?.created_at ?? now;
 
     db.prepare(
-      `INSERT OR REPLACE INTO results (id, round_id, test_id, status, tester_name, tester_email, description, severity, commit_hash, issue_url, issue_number, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO results (id, round_id, test_id, status, tester_name, tester_email, description, severity, commit_hash, issue_url, issue_number, created_at, updated_at, project_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       roundId,
@@ -281,14 +455,22 @@ export class SqliteAdapter implements StorageAdapter {
       existing?.issue_number ?? null,
       createdAt,
       now,
+      projectId ?? null,
     );
 
     const row = db.prepare('SELECT * FROM results WHERE id = ?').get(id) as ResultRow;
     return rowToResult(row);
   }
 
-  async listResults(roundId: string): Promise<Result[]> {
-    const rows = this.getDb()
+  async listResults(roundId: string, projectId?: string): Promise<Result[]> {
+    const db = this.getDb();
+    if (projectId !== undefined) {
+      const rows = db
+        .prepare('SELECT * FROM results WHERE round_id = ? AND project_id = ? ORDER BY rowid DESC')
+        .all(roundId, projectId) as ResultRow[];
+      return rows.map(rowToResult);
+    }
+    const rows = db
       .prepare('SELECT * FROM results WHERE round_id = ? ORDER BY rowid DESC')
       .all(roundId) as ResultRow[];
     return rows.map(rowToResult);
@@ -497,23 +679,36 @@ export class SqliteAdapter implements StorageAdapter {
 
   // --- Access Requests ---
 
-  async createAccessRequest(input: CreateAccessRequestInput): Promise<AccessRequest> {
+  async createAccessRequest(input: CreateAccessRequestInput, projectId?: string): Promise<AccessRequest> {
     const db = this.getDb();
     const id = randomUUID();
     const now = new Date().toISOString();
     db.prepare(
-      `INSERT INTO access_requests (id, email, name, status, message, created_at)
-       VALUES (?, ?, ?, 'pending', ?, ?)`,
-    ).run(id, input.email, input.name, input.message ?? null, now);
+      `INSERT INTO access_requests (id, email, name, status, message, created_at, project_id)
+       VALUES (?, ?, ?, 'pending', ?, ?, ?)`,
+    ).run(id, input.email, input.name, input.message ?? null, now, projectId ?? null);
     const row = db.prepare('SELECT * FROM access_requests WHERE id = ?').get(id) as AccessRequestRow;
     return rowToAccessRequest(row);
   }
 
-  async listAccessRequests(status?: string): Promise<AccessRequest[]> {
+  async listAccessRequests(status?: string, projectId?: string): Promise<AccessRequest[]> {
     const db = this.getDb();
-    const rows = status
-      ? (db.prepare('SELECT * FROM access_requests WHERE status = ? ORDER BY created_at DESC').all(status) as AccessRequestRow[])
-      : (db.prepare('SELECT * FROM access_requests ORDER BY created_at DESC').all() as AccessRequestRow[]);
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (status !== undefined) {
+      conditions.push('status = ?');
+      params.push(status);
+    }
+    if (projectId !== undefined) {
+      conditions.push('project_id = ?');
+      params.push(projectId);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const rows = db
+      .prepare(`SELECT * FROM access_requests ${where} ORDER BY created_at DESC`)
+      .all(...params) as AccessRequestRow[];
     return rows.map(rowToAccessRequest);
   }
 
@@ -540,5 +735,14 @@ export class SqliteAdapter implements StorageAdapter {
   private getDb(): Database.Database {
     if (!this.db) throw new Error('SqliteAdapter not initialized. Call initialize() first.');
     return this.db;
+  }
+
+  private requireEncryptionSecret(): string {
+    if (!this.encryptionSecret) {
+      throw new Error(
+        'Encryption secret is required for token operations. Set PUNCHLIST_AUTH_SECRET or pass encryptionSecret to SqliteAdapter.',
+      );
+    }
+    return this.encryptionSecret;
   }
 }
