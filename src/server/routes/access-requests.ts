@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { StorageAdapter } from '../../adapters/storage/types.js';
 import type { AuthAdapter } from '../../adapters/auth/types.js';
-import { createAccessRequestInputSchema } from '../../shared/schemas.js';
+import { createAccessRequestInputSchema, accessRequestStatusSchema } from '../../shared/schemas.js';
 import { requireAdmin } from '../middleware/require-admin.js';
 
 /**
@@ -65,7 +65,8 @@ export function adminAccessRequestRouter(
   // List all access requests
   router.get('/', requireAdmin, async (req, res, next) => {
     try {
-      const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+      const rawStatus = typeof req.query.status === 'string' ? req.query.status : undefined;
+      const status = rawStatus ? accessRequestStatusSchema.parse(rawStatus) : undefined;
       const requests = await storageAdapter.listAccessRequests(status, req.project?.id);
       res.json({ success: true, data: requests });
     } catch (err) {

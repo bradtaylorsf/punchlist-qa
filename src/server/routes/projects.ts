@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { StorageAdapter } from '../../adapters/storage/types.js';
+import { z } from 'zod';
 import { createProjectInputSchema, updateProjectInputSchema } from '../../shared/schemas.js';
 import { requireAdmin } from '../middleware/require-admin.js';
 
@@ -105,7 +106,8 @@ export function projectsRouter(storageAdapter: StorageAdapter): Router {
   // Remove user from project (admin only)
   router.delete('/:projectId/users/:email', requireAdmin, async (req, res, next) => {
     try {
-      await storageAdapter.removeUserFromProject(req.params.projectId as string, req.params.email as string);
+      const email = z.string().email().parse(decodeURIComponent(req.params.email as string));
+      await storageAdapter.removeUserFromProject(req.params.projectId as string, email);
       res.json({ success: true });
     } catch (err) {
       next(err);
