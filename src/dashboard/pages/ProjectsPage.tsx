@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
 import { ProjectMembersSection } from '../components/ProjectMembersSection';
 import * as api from '../api/client';
+import type { SyncResultData } from '../api/client';
 
 interface ProjectUser {
   projectId: string;
@@ -21,6 +22,72 @@ interface ProjectWithMembers {
   members: ProjectUser[];
 }
 
+interface SyncStatus {
+  syncedAt: string | null;
+  categoriesCount: number;
+  testCasesCount: number;
+}
+
+function SyncDiffSummary({ data }: { data: SyncResultData }) {
+  const catTotal = data.categories.added.length + data.categories.updated.length + data.categories.removed.length;
+  const tcTotal = data.testCases.added.length + data.testCases.updated.length + data.testCases.removed.length;
+
+  if (data.isFirstSync) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-gray-700">
+          First sync — importing from <code className="text-xs bg-gray-100 px-1 rounded">punchlist.config.json</code>:
+        </p>
+        <div className="text-sm space-y-1">
+          <p className="text-green-700">{data.categories.added.length} categories</p>
+          <p className="text-green-700">{data.testCases.added.length} test cases</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (catTotal === 0 && tcTotal === 0) {
+    return <p className="text-sm text-gray-500">Everything is up to date. No changes found.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {catTotal > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 uppercase mb-1">Categories</p>
+          <div className="text-sm space-y-0.5">
+            {data.categories.added.length > 0 && (
+              <p className="text-green-700">+ {data.categories.added.length} new</p>
+            )}
+            {data.categories.updated.length > 0 && (
+              <p className="text-amber-700">~ {data.categories.updated.length} updated</p>
+            )}
+            {data.categories.removed.length > 0 && (
+              <p className="text-red-700">- {data.categories.removed.length} removed</p>
+            )}
+          </div>
+        </div>
+      )}
+      {tcTotal > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 uppercase mb-1">Test Cases</p>
+          <div className="text-sm space-y-0.5">
+            {data.testCases.added.length > 0 && (
+              <p className="text-green-700">+ {data.testCases.added.length} new</p>
+            )}
+            {data.testCases.updated.length > 0 && (
+              <p className="text-amber-700">~ {data.testCases.updated.length} updated</p>
+            )}
+            {data.testCases.removed.length > 0 && (
+              <p className="text-red-700">- {data.testCases.removed.length} removed</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ProjectsPage() {
   const { user } = useAuth();
   const { refreshProjects } = useProject();
@@ -29,13 +96,27 @@ export function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Add project form — just the repo URL or slug
+  // Add project form
   const [newRepo, setNewRepo] = useState('');
   const [adding, setAdding] = useState(false);
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Sync state
+  const [syncStatuses, setSyncStatuses] = useState<Record<string, SyncStatus>>({});
+  const [syncTarget, setSyncTarget] = useState<string | null>(null);
+  const [syncPreview, setSyncPreview] = useState<SyncResultData | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [applying, setApplying] = useState(false);
+
+  const loadSyncStatus = useCallback(async (projectId: string) => {
+    try {
+      const sRes = await api.getSyncStatus(projectId);
+      setSyncStatuses((prev) => ({ ...prev, [projectId]: sRes.data }));
+    } catch { /* ignore — sync may not be available */ }
+  }, []);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -53,12 +134,17 @@ export function ProjectsPage() {
         }),
       );
       setProjectsWithMembers(withMembers);
+
+      // Load sync statuses in background (non-blocking)
+      for (const p of res.data) {
+        loadSyncStatus(p.id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load projects');
     } finally {
       setLoading(false);
     }
-  }, [refreshProjects]);
+  }, [refreshProjects, loadSyncStatus]);
 
   useEffect(() => {
     if (user?.role === 'admin') loadAll();
@@ -78,7 +164,6 @@ export function ProjectsPage() {
     setAdding(true);
     setError(null);
     try {
-      // Server handles URL parsing and name derivation
       await api.createProject({ repoSlug: newRepo.trim() });
       setNewRepo('');
       await loadAll();
@@ -107,6 +192,38 @@ export function ProjectsPage() {
     setProjectsWithMembers((prev) =>
       prev.map((p) => (p.id === projectId ? { ...p, members } : p)),
     );
+  }
+
+  async function handleSyncPreview(projectId: string) {
+    setSyncTarget(projectId);
+    setSyncPreview(null);
+    setSyncing(true);
+    setError(null);
+    try {
+      const res = await api.syncProjectConfig(projectId, true);
+      setSyncPreview(res.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch config from repo');
+      setSyncTarget(null);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handleSyncApply() {
+    if (!syncTarget) return;
+    setApplying(true);
+    setError(null);
+    try {
+      await api.syncProjectConfig(syncTarget, false);
+      setSyncTarget(null);
+      setSyncPreview(null);
+      await loadAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sync config');
+    } finally {
+      setApplying(false);
+    }
   }
 
   return (
@@ -159,36 +276,99 @@ export function ProjectsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {projectsWithMembers.map((project) => (
-            <div key={project.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-              {/* Project header */}
-              <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{project.name}</p>
-                  <p className="text-xs text-gray-500">{project.repoSlug}</p>
+          {projectsWithMembers.map((project) => {
+            const status = syncStatuses[project.id];
+            return (
+              <div key={project.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                {/* Project header */}
+                <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{project.name}</p>
+                    <p className="text-xs text-gray-500">{project.repoSlug}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-400">
+                      {project.members.length} member{project.members.length !== 1 ? 's' : ''}
+                    </span>
+                    <button
+                      onClick={() => handleSyncPreview(project.id)}
+                      disabled={syncing && syncTarget === project.id}
+                      className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                    >
+                      {syncing && syncTarget === project.id ? 'Loading...' : 'Sync Config'}
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(project.id)}
+                      className="text-xs text-red-600 hover:text-red-800"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-gray-400">
-                    {project.members.length} member{project.members.length !== 1 ? 's' : ''}
-                  </span>
-                  <button
-                    onClick={() => setDeleteTarget(project.id)}
-                    className="text-xs text-red-600 hover:text-red-800"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
 
-              {/* Members section (extracted component) */}
-              <ProjectMembersSection
-                projectId={project.id}
-                members={project.members}
-                onMembersChanged={(members) => handleMembersChanged(project.id, members)}
-                onError={setError}
-              />
+                {/* Sync status bar */}
+                {status && (
+                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                    <span className="text-xs text-gray-500">
+                      {status.testCasesCount} test cases, {status.categoriesCount} categories
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {status.syncedAt
+                        ? `Synced ${new Date(status.syncedAt).toLocaleDateString()}`
+                        : 'Never synced'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Members section */}
+                <ProjectMembersSection
+                  projectId={project.id}
+                  members={project.members}
+                  onMembersChanged={(members) => handleMembersChanged(project.id, members)}
+                  onError={setError}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Sync Preview Modal */}
+      {syncTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-1">Sync Config</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              {projectsWithMembers.find((p) => p.id === syncTarget)?.repoSlug}
+            </p>
+
+            {syncing ? (
+              <p className="text-sm text-gray-500 py-4">Fetching config from repository...</p>
+            ) : syncPreview ? (
+              <div className="mb-6">
+                <SyncDiffSummary data={syncPreview} />
+              </div>
+            ) : null}
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setSyncTarget(null); setSyncPreview(null); }}
+                disabled={applying}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              {syncPreview && (
+                <button
+                  onClick={handleSyncApply}
+                  disabled={applying}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {applying ? 'Applying...' : 'Apply Changes'}
+                </button>
+              )}
             </div>
-          ))}
+          </div>
         </div>
       )}
 

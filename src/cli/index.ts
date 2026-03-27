@@ -15,6 +15,7 @@ Usage:
 
 Commands:
   init [--hosted|--local]       Initialize Punchlist QA in a project
+       [--generate]             Auto-generate test cases via AI CLI
   serve                         Start the QA dashboard server
   invite <email> --name <name>  Generate a tester invite link
   revoke <email>                Revoke a tester's access
@@ -54,6 +55,7 @@ export async function main(argv: string[]): Promise<void> {
       'base-url': { type: 'string' },
       hosted: { type: 'boolean', default: false },
       local: { type: 'boolean', default: false },
+      generate: { type: 'boolean', default: false },
     },
     allowPositionals: true,
     strict: false,
@@ -97,6 +99,7 @@ export async function main(argv: string[]): Promise<void> {
       await initCommand({
         hosted: values.hosted as boolean,
         local: values.local as boolean,
+        generate: values.generate as boolean,
       });
       break;
     }

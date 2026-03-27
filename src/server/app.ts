@@ -11,6 +11,7 @@ import { authRouter } from './routes/auth.js';
 import { roundsRouter } from './routes/rounds.js';
 import { resultsRouter } from './routes/results.js';
 import { configRouter } from './routes/config.js';
+import { syncRouter } from './routes/sync.js';
 import { issuesRouter } from './routes/issues-api.js';
 import { commitRouter } from './routes/commit.js';
 import { usersRouter } from './routes/users-api.js';
@@ -37,6 +38,8 @@ export interface AppDependencies {
   databaseUrl?: string;
   config?: PunchlistConfig;
   corsDomains: string[];
+  /** GitHub token for fetching config from repos (used by sync route) */
+  githubToken?: string;
 }
 
 /**
@@ -113,11 +116,25 @@ export function createApp(deps: AppDependencies): Express {
       projectScope,
       adminAccessRequestRouter(storage, sessionSecret),
     );
+    app.use(
+      '/api/projects/:projectId/config',
+      requireAuth,
+      projectScope,
+      configRouter({ config: deps.config, storageAdapter: storage }),
+    );
+    if (deps.githubToken) {
+      app.use(
+        '/api/projects/:projectId/sync',
+        requireAuth,
+        projectScope,
+        syncRouter(storage, deps.githubToken),
+      );
+    }
 
     // --- Legacy unscoped routes (backward compat via default project) ---
     app.use('/api/rounds', requireAuth, defaultProject, roundsRouter(storage));
     app.use('/api/rounds', requireAuth, defaultProject, resultsRouter(storage));
-    app.use('/api/config', requireAuth, configRouter(deps.config));
+    app.use('/api/config', requireAuth, defaultProject, configRouter({ config: deps.config, storageAdapter: storage }));
     app.use('/api/issues', requireAuth, defaultProject, issuesRouter(deps.issueAdapter));
     app.use('/api/commit', requireAuth, commitRouter());
     app.use('/api/users', requireAuth, usersRouter(storage, sessionSecret));

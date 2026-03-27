@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, cpSync, readdirSync, readFileSync, appendFileSync, writeFileSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync, spawn } from 'node:child_process';
 import { writeConfig } from '../../shared/config.js';
 import { writeEnvFile } from '../../shared/env.js';
 import { validateRepoFormat } from '../../shared/validation.js';
@@ -19,6 +19,7 @@ import type { PunchlistConfig, AIToolChoice } from '../../shared/types.js';
 export interface InitOptions {
   hosted?: boolean;
   local?: boolean;
+  generate?: boolean;
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -72,7 +73,173 @@ export function copySkills(platform: 'claude-code' | 'codex', cwd: string): void
   }
 }
 
-async function hostedInit(cwd: string): Promise<void> {
+function detectCliAvailability(tool: 'claude-code' | 'codex'): boolean {
+  const cmd = tool === 'claude-code' ? 'claude' : 'codex';
+  try {
+    execFileSync('which', [cmd], { stdio: ['pipe', 'pipe', 'pipe'] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+interface SkillDef {
+  name: string;
+  file: string;
+  label: string;
+  prompt: string;
+  question: string;
+}
+
+const SKILLS: Record<string, SkillDef> = {
+  'generate-tests': {
+    name: 'generate-tests',
+    file: 'generate-test-cases.md',
+    label: 'generate test cases',
+    prompt: [
+      'Analyze this codebase to identify all user-facing features, then generate',
+      'structured QA test cases. Write the categories and testCases arrays directly',
+      'to punchlist.config.json following the schema defined in the skill.',
+      'Do not ask for confirmation — just analyze and write the test cases.',
+    ].join(' '),
+    question: '  Generate test cases now? (Y/n)',
+  },
+  'integrate-widget': {
+    name: 'integrate-widget',
+    file: 'integrate-widget.md',
+    label: 'integrate widget',
+    prompt: [
+      'Analyze this project to determine the best way to add the Punchlist QA',
+      'support widget. Find the main HTML file or layout component, choose the',
+      'right variant (fab, inline, or menu-item), and add the script tag and',
+      'init call with appropriate configuration. Follow the skill instructions exactly.',
+    ].join(' '),
+    question: '  Add widget to your app now? (Y/n)',
+  },
+};
+
+function getSkillPath(tool: 'claude-code' | 'codex', skillFile: string, cwd: string): string {
+  const dir = tool === 'claude-code' ? '.claude' : '.codex';
+  return join(cwd, dir, 'skills', skillFile);
+}
+
+function buildSkillPrompt(skillPath: string, skillPrompt: string): string {
+  return `Read the skill file at ${skillPath} and follow its instructions exactly. ${skillPrompt}`;
+}
+
+function runSkillCommand(
+  tool: 'claude-code' | 'codex',
+  skill: SkillDef,
+  cwd: string,
+): Promise<void> {
+  const skillPath = getSkillPath(tool, skill.file, cwd);
+  if (!existsSync(skillPath)) {
+    console.log(`  ⚠ Skill file not found at ${skillPath.replace(cwd, '.')}`);
+    console.log('  Run "npx punchlist-qa update-skills" first, then try again.');
+    return Promise.resolve();
+  }
+
+  const prompt = buildSkillPrompt(skillPath, skill.prompt);
+  const cmd = tool === 'claude-code' ? 'claude' : 'codex';
+  const args = tool === 'claude-code' ? ['-p', prompt] : ['exec', prompt];
+
+  console.log(`\n  ⏳ Running: ${cmd} ${args[0]} "...${skill.label}..."\n`);
+  return new Promise<void>((resolve) => {
+    const child = spawn(cmd, args, { cwd, stdio: 'inherit' });
+    child.on('close', (code) => {
+      if (code === 0) {
+        console.log(`\n  ✅ Done: ${skill.label}.`);
+      } else {
+        console.log(`\n  ⚠ ${cmd} exited with code ${code}. You can run it manually:`);
+        printManualSkillCommand(tool, skill, cwd);
+      }
+      resolve();
+    });
+    child.on('error', () => {
+      console.log(`\n  ⚠ Failed to start ${cmd}. You can run it manually:`);
+      printManualSkillCommand(tool, skill, cwd);
+      resolve();
+    });
+  });
+}
+
+function pickCliTool(aiTool: AIToolChoice): 'claude-code' | 'codex' | null {
+  if (aiTool === 'none') return null;
+  if (aiTool === 'both') {
+    if (detectCliAvailability('claude-code')) return 'claude-code';
+    if (detectCliAvailability('codex')) return 'codex';
+    return null;
+  }
+  return detectCliAvailability(aiTool) ? aiTool : null;
+}
+
+function printManualSkillCommand(
+  tool: 'claude-code' | 'codex',
+  skill: SkillDef,
+  cwd: string,
+): void {
+  const skillPath = getSkillPath(tool, skill.file, cwd);
+  const prompt = buildSkillPrompt(skillPath, skill.prompt);
+  if (tool === 'claude-code') {
+    console.log(`  claude -p "${prompt}"`);
+  } else {
+    console.log(`  codex exec "${prompt}"`);
+  }
+}
+
+function printManualCommands(aiTool: AIToolChoice, skill: SkillDef, cwd: string): void {
+  const tools: Array<'claude-code' | 'codex'> =
+    aiTool === 'both' ? ['claude-code', 'codex'] : aiTool !== 'none' ? [aiTool as 'claude-code' | 'codex'] : [];
+  for (const tool of tools) {
+    printManualSkillCommand(tool, skill, cwd);
+  }
+}
+
+async function maybeRunSkill(
+  aiTool: AIToolChoice,
+  skill: SkillDef,
+  cwd: string,
+  autoRun?: boolean,
+): Promise<void> {
+  const tool = pickCliTool(aiTool);
+
+  if (autoRun) {
+    if (!tool) {
+      console.log(`\n  ⚠ Cannot auto-run "${skill.label}": AI CLI tool not found in PATH.`);
+      console.log('  Install the CLI and run manually:');
+      printManualCommands(aiTool, skill, cwd);
+      return;
+    }
+    await runSkillCommand(tool, skill, cwd);
+    return;
+  }
+
+  // Interactive: ask the user
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    console.log(`\n  🤖 Auto-${skill.label}?`);
+    if (tool) {
+      console.log(`  Detected: ${tool === 'claude-code' ? 'claude' : 'codex'} CLI`);
+      const answer = await ask(rl, skill.question, 'Y');
+      rl.close();
+      if (answer.toLowerCase() !== 'n') {
+        await runSkillCommand(tool, skill, cwd);
+      } else {
+        console.log('\n  You can run it later with:');
+        printManualCommands(aiTool, skill, cwd);
+      }
+    } else {
+      rl.close();
+      console.log(`  No AI CLI detected. To ${skill.label}, install the CLI and run:`);
+      printManualCommands(aiTool, skill, cwd);
+    }
+  } catch (err) {
+    rl.close();
+    throw err;
+  }
+}
+
+async function hostedInit(cwd: string, options: InitOptions): Promise<void> {
   console.log('\n  🎯 Punchlist QA — Hosted Mode Setup\n');
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -131,6 +298,12 @@ async function hostedInit(cwd: string): Promise<void> {
     console.log('\n  📋 Add this script tag to your app:\n');
     console.log(`  <script src="${cleanUrl}/widget.js"></script>\n`);
 
+    // Run AI skills
+    if (aiTool !== 'none') {
+      await maybeRunSkill(aiTool, SKILLS['generate-tests'], cwd, options.generate);
+      await maybeRunSkill(aiTool, SKILLS['integrate-widget'], cwd, options.generate);
+    }
+
     // Next steps
     console.log('  📝 Next steps:');
     console.log('  1. Add the widget script tag to your HTML');
@@ -147,7 +320,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
 
   // Hosted mode (default when --local is not specified)
   if (options.hosted && !options.local) {
-    await hostedInit(cwd);
+    await hostedInit(cwd, options);
     return;
   }
 
@@ -284,7 +457,13 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
       `  <script src="http://localhost:${DEFAULT_PORT}/widget.js" data-project="${projectName}"></script>\n`,
     );
 
-    // Step 8: Next steps
+    // Step 8: Run AI skills
+    if (aiTool !== 'none') {
+      await maybeRunSkill(aiTool, SKILLS['generate-tests'], cwd, options.generate);
+      await maybeRunSkill(aiTool, SKILLS['integrate-widget'], cwd, options.generate);
+    }
+
+    // Step 9: Next steps
     console.log('  📝 Next steps:');
     console.log('  1. Add test cases to punchlist.config.json (or use AI skills to generate them)');
     console.log('  2. Run: npx punchlist-qa serve');
