@@ -1,8 +1,36 @@
 import { Router } from 'express';
 import type { StorageAdapter } from '../../adapters/storage/types.js';
 import { z } from 'zod';
-import { createProjectInputSchema, updateProjectInputSchema } from '../../shared/schemas.js';
+import { updateProjectInputSchema } from '../../shared/schemas.js';
 import { requireAdmin } from '../middleware/require-admin.js';
+
+/**
+ * Parse a GitHub URL or repo slug into a normalized `owner/repo` slug.
+ * Accepts:
+ *   - `owner/repo`
+ *   - `https://github.com/owner/repo`
+ *   - `https://github.com/owner/repo.git`
+ *   - `github.com/owner/repo`
+ */
+function parseRepoSlug(input: string): string {
+  const trimmed = input.trim().replace(/\.git$/, '').replace(/\/+$/, '');
+
+  // If it looks like a URL, extract owner/repo from the path
+  const urlPattern = /(?:https?:\/\/)?(?:www\.)?github\.com\/([^/]+\/[^/]+)/;
+  const match = trimmed.match(urlPattern);
+  if (match) return match[1];
+
+  // If it's already owner/repo format, return as-is
+  const slugPattern = /^[^/]+\/[^/]+$/;
+  if (slugPattern.test(trimmed)) return trimmed;
+
+  throw new Error(`Invalid repo format: expected "owner/repo" or a GitHub URL`);
+}
+
+const createProjectBodySchema = z.object({
+  repoSlug: z.string().min(1),
+  name: z.string().min(1).optional(),
+});
 
 export function projectsRouter(storageAdapter: StorageAdapter): Router {
   const router = Router();
@@ -25,8 +53,12 @@ export function projectsRouter(storageAdapter: StorageAdapter): Router {
   // Create project (admin only)
   router.post('/', requireAdmin, async (req, res, next) => {
     try {
-      const input = createProjectInputSchema.parse(req.body);
-      const project = await storageAdapter.createProject(input);
+      const body = createProjectBodySchema.parse(req.body);
+      const repoSlug = parseRepoSlug(body.repoSlug);
+      const project = await storageAdapter.createProject({
+        repoSlug,
+        name: body.name,
+      });
 
       // Auto-add the creating admin to the project
       await storageAdapter.addUserToProject(project.id, req.user!.email, 'admin');

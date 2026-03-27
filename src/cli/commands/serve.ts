@@ -13,7 +13,6 @@ async function seedDefaultProject(
   storage: Awaited<ReturnType<typeof initAdapters>>['storage'],
   repoSlug: string,
   projectName: string,
-  githubToken?: string,
 ): Promise<string> {
   let project = await storage.getProjectByRepoSlug(repoSlug);
 
@@ -21,7 +20,6 @@ async function seedDefaultProject(
     project = await storage.createProject({
       repoSlug,
       name: projectName,
-      githubToken,
     });
     console.log(`  Created default project: ${project.name} (${project.repoSlug})`);
 
@@ -50,12 +48,11 @@ export async function serveCommand(): Promise<void> {
     process.exit(1);
   }
 
-  // Seed default project
+  // Seed default project (GitHub token comes from env, not stored per-project)
   const defaultProjectId = await seedDefaultProject(
     storage,
     config.issueTracker.repo,
     config.projectName,
-    config.secrets.githubToken,
   );
 
   // Create issue adapter for default project (legacy routes)
