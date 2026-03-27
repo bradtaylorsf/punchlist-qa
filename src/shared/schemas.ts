@@ -399,6 +399,18 @@ export const punchlistConfigSchema = z
     }
   });
 
+/**
+ * Partial config schema for sync — only validates categories and testCases.
+ * Used when fetching config from repos that may not include all fields
+ * (e.g., hosted mode configs that only define widget, categories, testCases).
+ */
+export const partialConfigSchema = z.object({
+  categories: z.array(categorySchema).default([]),
+  testCases: z.array(testCaseSchema).default([]),
+}).passthrough();
+
+export type PartialConfig = z.infer<typeof partialConfigSchema>;
+
 // --- Inferred types ---
 
 export type PunchlistConfig = z.infer<typeof punchlistConfigSchema>;
