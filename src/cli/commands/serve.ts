@@ -92,6 +92,7 @@ async function serveHosted(): Promise<void> {
     databaseUrl,
     config: undefined,
     corsDomains,
+    githubToken,
   });
 
   const port = Number(process.env.PORT) || DEFAULT_PORT;
@@ -169,6 +170,7 @@ async function serveLocal(): Promise<void> {
     sessionSecret,
     config,
     corsDomains: config.widget.corsDomains,
+    githubToken: config.secrets.githubToken,
   });
 
   const port = Number(process.env.PORT) || DEFAULT_PORT;

@@ -13,7 +13,11 @@ const SKILL_FILES = [
   'generate-test-cases.md',
   'update-test-cases.md',
   'qa-assist.md',
+  'integrate-widget.md',
 ] as const;
+
+// Skills that define test case schemas (instructions, category, ID regex)
+const TEST_CASE_SKILLS = new Set(['generate-test-cases.md', 'update-test-cases.md']);
 
 describe('skill content', () => {
   for (const platform of PLATFORMS) {
@@ -35,7 +39,7 @@ describe('skill content', () => {
         it('uses correct field name "instructions" (not "steps")', () => {
           content = readSkill(platform, file);
           // The generate and update skills must reference the instructions field
-          if (file !== 'qa-assist.md') {
+          if (TEST_CASE_SKILLS.has(file)) {
             expect(content).toContain('`instructions`');
           }
           // None of the skills should use the old "steps" array format
@@ -44,7 +48,7 @@ describe('skill content', () => {
 
         it('uses correct field name "category" (not "module")', () => {
           content = readSkill(platform, file);
-          if (file !== 'qa-assist.md') {
+          if (TEST_CASE_SKILLS.has(file)) {
             expect(content).toContain('`category`');
           }
           // None of the skills should reference the old "module" field
@@ -53,7 +57,7 @@ describe('skill content', () => {
 
         it('contains the correct ID regex pattern', () => {
           content = readSkill(platform, file);
-          if (file !== 'qa-assist.md') {
+          if (TEST_CASE_SKILLS.has(file)) {
             expect(content).toContain('^[a-z][a-z0-9-]*-\\d{3}$');
           }
         });
@@ -89,6 +93,33 @@ describe('skill content', () => {
       it(`${platform}: states it does not modify config`, () => {
         const content = readSkill(platform, 'qa-assist.md');
         expect(content).toMatch(/not\b.*modify/i);
+      });
+    }
+  });
+
+  describe('integrate-widget.md specifics', () => {
+    for (const platform of PLATFORMS) {
+      it(`${platform}: documents PunchlistWidget.init()`, () => {
+        const content = readSkill(platform, 'integrate-widget.md');
+        expect(content).toContain('PunchlistWidget.init');
+      });
+
+      it(`${platform}: documents all three variants`, () => {
+        const content = readSkill(platform, 'integrate-widget.md');
+        expect(content).toContain("'fab'");
+        expect(content).toContain("'inline'");
+        expect(content).toContain("'menu-item'");
+      });
+
+      it(`${platform}: documents serverUrl as required`, () => {
+        const content = readSkill(platform, 'integrate-widget.md');
+        expect(content).toContain('serverUrl');
+        expect(content).toMatch(/required/i);
+      });
+
+      it(`${platform}: documents CORS setup`, () => {
+        const content = readSkill(platform, 'integrate-widget.md');
+        expect(content).toContain('corsDomains');
       });
     }
   });

@@ -173,7 +173,42 @@ export function getConfig() {
       }>;
       categories: Array<{ id: string; label: string; description?: string }>;
     };
-  }>('/config');
+  }>(projectPath('/config'));
+}
+
+// Config Sync
+export interface SyncDiff<T> {
+  added: T[];
+  updated: T[];
+  removed: T[];
+}
+
+export interface SyncResultData {
+  categories: SyncDiff<{ id: string; label: string; description?: string }>;
+  testCases: SyncDiff<{
+    id: string;
+    title: string;
+    category: string;
+    priority: string;
+    instructions: string;
+    expectedResult: string;
+  }>;
+  syncedAt: string | null;
+  isFirstSync: boolean;
+}
+
+export function getSyncStatus(projectId: string) {
+  return request<{
+    success: boolean;
+    data: { syncedAt: string | null; categoriesCount: number; testCasesCount: number };
+  }>(`/projects/${projectId}/sync`);
+}
+
+export function syncProjectConfig(projectId: string, preview = false) {
+  return request<{ success: boolean; data: SyncResultData }>(
+    `/projects/${projectId}/sync?preview=${preview}`,
+    { method: 'POST' },
+  );
 }
 
 // Rounds

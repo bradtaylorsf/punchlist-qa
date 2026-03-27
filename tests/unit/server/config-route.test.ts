@@ -68,7 +68,7 @@ describe('config route', () => {
 
   it('GET /api/config returns project config', async () => {
     const app = express();
-    app.use('/api/config', configRouter(mockConfig));
+    app.use('/api/config', configRouter({ config: mockConfig }));
     server = app.listen(0);
 
     const res = await makeRequest(server, '/api/config');
