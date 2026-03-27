@@ -45,7 +45,10 @@ export interface AppDependencies {
  */
 export function createApp(deps: AppDependencies): Express {
   const app = express();
-  const sessionSecret = deps.sessionSecret ?? 'dev-fallback-secret-do-not-use-in-production';
+  if (!deps.sessionSecret) {
+    throw new Error('sessionSecret is required. Set PUNCHLIST_AUTH_SECRET in .env or environment.');
+  }
+  const sessionSecret = deps.sessionSecret;
 
   // Health check — no auth, no CORS, no body parsing
   app.get('/health', async (_req, res) => {

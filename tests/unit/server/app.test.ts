@@ -119,6 +119,7 @@ describe('createApp integration', () => {
     const adapter = createMockAdapter();
     const app = createApp({
       issueAdapter: adapter,
+      sessionSecret: 'test-secret-at-least-16-chars',
       corsDomains: [],
     });
     server = app.listen(0);

@@ -61,14 +61,21 @@ export function authRouter(storage: StorageAdapter, sessionSecret: string): Rout
       const dummyToken = generateToken(sessionSecret, body.email);
       const tokenHash = hashToken(dummyToken);
 
-      const user = await storage.createUser({
-        email: body.email,
-        name: body.name,
-        tokenHash,
-        role: userRoleSchema.parse('admin'),
-        invitedBy: 'self-setup',
-        passwordHash,
-      });
+      let user;
+      try {
+        user = await storage.createUser({
+          email: body.email,
+          name: body.name,
+          tokenHash,
+          role: userRoleSchema.parse('admin'),
+          invitedBy: 'self-setup',
+          passwordHash,
+        });
+      } catch {
+        // Race condition: another request created the first user between our
+        // countUsers check and createUser call. Treat as setup already complete.
+        throw new SetupAlreadyCompleteError();
+      }
 
       await new Promise<void>((resolve, reject) => {
         req.login(user, (err) => {
@@ -287,7 +294,8 @@ export function authRouter(storage: StorageAdapter, sessionSecret: string): Rout
 
       const user = await storage.getUserByEmail(email);
       if (!user) {
-        res.status(404).json({ success: false, error: 'User not found' });
+        // Admin-only endpoint, so safe to reveal non-existence
+        res.status(404).json({ success: false, error: 'No account found for this email' });
         return;
       }
 
