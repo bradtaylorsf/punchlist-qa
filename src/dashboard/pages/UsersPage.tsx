@@ -35,7 +35,7 @@ export function UsersPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
-  // Regenerate
+  // Reset Password
   const [shownInviteUrl, setShownInviteUrl] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState<string | null>(null);
 
@@ -99,11 +99,11 @@ export function UsersPage() {
     setRegenerating(targetEmail);
     setError(null);
     try {
-      const res = await api.regenerateToken(targetEmail);
+      const res = await api.resetPassword(targetEmail);
       setShownInviteUrl(res.data.inviteUrl);
       setInviteUrl(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to regenerate token');
+      setError(err instanceof Error ? err.message : 'Failed to reset password');
     } finally {
       setRegenerating(null);
     }
@@ -214,7 +214,9 @@ export function UsersPage() {
         <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-green-800">Invite URL</p>
+              <p className="text-sm font-medium text-green-800">
+                {shownInviteUrl ? 'Password Reset Link' : 'Invite URL'}
+              </p>
               <code className="text-xs text-green-900 break-all select-all">{inviteUrl || shownInviteUrl}</code>
             </div>
             <button
@@ -275,7 +277,7 @@ export function UsersPage() {
                           disabled={regenerating === u.email}
                           className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
                         >
-                          {regenerating === u.email ? 'Regenerating...' : 'Regenerate'}
+                          {regenerating === u.email ? 'Sending...' : 'Reset Password'}
                         </button>
                         {u.email !== user?.email && (
                           <button

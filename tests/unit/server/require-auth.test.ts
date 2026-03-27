@@ -1,23 +1,13 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+/**
+ * Tests for the requireAuth middleware.
+ * The middleware now relies on Passport.js session authentication.
+ * We simulate Passport's behavior by attaching req.isAuthenticated directly.
+ */
+import { describe, it, expect, afterEach } from 'vitest';
 import express from 'express';
 import http from 'node:http';
-import type { AuthAdapter } from '../../../src/adapters/auth/types.js';
+import type { Request, Response, NextFunction } from 'express';
 import { requireAuth } from '../../../src/server/middleware/auth.js';
-
-function createMockAuthAdapter(overrides: Partial<AuthAdapter> = {}): AuthAdapter {
-  return {
-    generateToken: vi.fn(),
-    validateToken: vi.fn(),
-    createInvite: vi.fn(),
-    revokeAccess: vi.fn(),
-    listUsers: vi.fn(),
-    loginWithToken: vi.fn(),
-    createSession: vi.fn(),
-    validateSession: vi.fn().mockResolvedValue(null),
-    destroySession: vi.fn(),
-    ...overrides,
-  } as AuthAdapter;
-}
 
 function makeRequest(
   server: http.Server,
@@ -54,6 +44,20 @@ function makeRequest(
   });
 }
 
+/**
+ * Inject Passport-like session state so requireAuth can check req.isAuthenticated().
+ */
+function injectPassportState(authenticated: boolean, user?: object) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    // Passport adds req.isAuthenticated as a method — simulate it
+    (req as Request & { isAuthenticated: () => boolean }).isAuthenticated = () => authenticated;
+    if (authenticated && user) {
+      req.user = user as Express.User;
+    }
+    next();
+  };
+}
+
 describe('requireAuth middleware', () => {
   let server: http.Server;
 
@@ -63,34 +67,20 @@ describe('requireAuth middleware', () => {
     }
   });
 
-  it('returns 401 when no cookie is present', async () => {
-    const auth = createMockAuthAdapter();
+  it('returns 401 when not authenticated', async () => {
     const app = express();
-    app.use(requireAuth(auth));
+    app.use(injectPassportState(false));
+    app.use(requireAuth);
     app.get('/test', (_req, res) => res.json({ ok: true }));
     server = app.listen(0);
 
     const res = await makeRequest(server, 'GET', '/test');
     expect(res.status).toBe(401);
     expect(res.body.error).toBe('Authentication required');
+    expect(res.body.success).toBe(false);
   });
 
-  it('returns 401 when session is invalid', async () => {
-    const auth = createMockAuthAdapter({
-      validateSession: vi.fn().mockResolvedValue(null),
-    });
-    const app = express();
-    app.use(requireAuth(auth));
-    app.get('/test', (_req, res) => res.json({ ok: true }));
-    server = app.listen(0);
-
-    const res = await makeRequest(server, 'GET', '/test', {
-      Cookie: 'punchlist_session=invalid-session-id',
-    });
-    expect(res.status).toBe(401);
-  });
-
-  it('passes through and sets req.user with valid session', async () => {
+  it('passes through when authenticated and sets req.user', async () => {
     const mockUser = {
       id: 'u1',
       email: 'tester@example.com',
@@ -102,37 +92,28 @@ describe('requireAuth middleware', () => {
       createdAt: new Date().toISOString(),
     };
 
-    const auth = createMockAuthAdapter({
-      validateSession: vi.fn().mockResolvedValue(mockUser),
-    });
-
     const app = express();
-    app.use(requireAuth(auth));
+    app.use(injectPassportState(true, mockUser));
+    app.use(requireAuth);
     app.get('/test', (req, res) => {
       res.json({ ok: true, user: req.user });
     });
     server = app.listen(0);
 
-    const res = await makeRequest(server, 'GET', '/test', {
-      Cookie: 'punchlist_session=valid-session-id',
-    });
+    const res = await makeRequest(server, 'GET', '/test');
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect((res.body.user as Record<string, unknown>).email).toBe('tester@example.com');
   });
 
-  it('returns 401 when validateSession throws', async () => {
-    const auth = createMockAuthAdapter({
-      validateSession: vi.fn().mockRejectedValue(new Error('DB error')),
-    });
+  it('returns 401 when isAuthenticated returns false (no user)', async () => {
     const app = express();
-    app.use(requireAuth(auth));
+    app.use(injectPassportState(false));
+    app.use(requireAuth);
     app.get('/test', (_req, res) => res.json({ ok: true }));
     server = app.listen(0);
 
-    const res = await makeRequest(server, 'GET', '/test', {
-      Cookie: 'punchlist_session=some-id',
-    });
+    const res = await makeRequest(server, 'GET', '/test');
     expect(res.status).toBe(401);
   });
 });

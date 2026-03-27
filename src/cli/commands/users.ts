@@ -1,10 +1,11 @@
 import { initAdapters } from '../helpers.js';
+import type { User } from '../../shared/types.js';
 
 export async function usersCommand(): Promise<void> {
-  const { auth, storage } = await initAdapters();
+  const { storage } = await initAdapters();
 
   try {
-    const users = await auth.listUsers();
+    const users = await storage.listUsers();
 
     if (users.length === 0) {
       console.log(
@@ -14,9 +15,9 @@ export async function usersCommand(): Promise<void> {
     }
 
     console.log('');
-    const emailWidth = Math.max(6, ...users.map((u) => u.email.length));
-    const nameWidth = Math.max(5, ...users.map((u) => u.name.length));
-    const roleWidth = Math.max(5, ...users.map((u) => u.role.length));
+    const emailWidth = Math.max(6, ...users.map((u: User) => u.email.length));
+    const nameWidth = Math.max(5, ...users.map((u: User) => u.name.length));
+    const roleWidth = Math.max(5, ...users.map((u: User) => u.role.length));
     const header = `  ${'Email'.padEnd(emailWidth)}  ${'Name'.padEnd(nameWidth)}  ${'Role'.padEnd(roleWidth)}  ${'Status'.padEnd(8)}  Created`;
     console.log(header);
     console.log('  ' + '-'.repeat(header.length - 2));

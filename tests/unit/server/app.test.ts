@@ -67,6 +67,7 @@ describe('createApp integration', () => {
     const adapter = createMockAdapter();
     const app = createApp({
       issueAdapter: adapter,
+      sessionSecret: 'test-secret-at-least-16-chars',
       corsDomains: ['http://localhost:3000'],
     });
     server = app.listen(0);
@@ -88,6 +89,7 @@ describe('createApp integration', () => {
     const adapter = createMockAdapter();
     const app = createApp({
       issueAdapter: adapter,
+      sessionSecret: 'test-secret-at-least-16-chars',
       corsDomains: ['http://localhost:3000'],
     });
     server = app.listen(0);
@@ -102,7 +104,7 @@ describe('createApp integration', () => {
 
   it('responds to GET /health with 200', async () => {
     const adapter = createMockAdapter();
-    const app = createApp({ issueAdapter: adapter, corsDomains: [] });
+    const app = createApp({ issueAdapter: adapter, sessionSecret: 'test-secret-at-least-16-chars', corsDomains: [] });
     server = app.listen(0);
 
     const res = await makeRequest(server, 'GET', '/health');

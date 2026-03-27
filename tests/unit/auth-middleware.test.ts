@@ -1,188 +1,89 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { TokenAuthAdapter } from '../../src/adapters/auth/token.js';
-import { SqliteAdapter } from '../../src/adapters/storage/sqlite-adapter.js';
+/**
+ * Tests for the invite token utilities that replaced the old auth middleware.
+ * The old parseCookie/buildSetCookie/handleLogin/handleLogout/authenticateRequest
+ * functions have been removed. Session management is now handled by Passport.js +
+ * express-session. This file tests the new invite token functions.
+ */
+import { describe, it, expect } from 'vitest';
 import {
-  parseCookie,
-  buildSetCookie,
-  buildClearCookie,
-  handleLogin,
-  handleLogout,
-  authenticateRequest,
-} from '../../src/adapters/auth/middleware.js';
+  generateToken,
+  validateToken,
+  hashToken,
+  buildInviteUrl,
+} from '../../src/server/auth/invite.js';
 
 const secret = 'a-very-long-secret-for-testing-purposes-minimum-16-chars';
-let storage: SqliteAdapter;
-let auth: TokenAuthAdapter;
-let tmpDir: string;
 
-beforeEach(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'punchlist-mw-test-'));
-  storage = new SqliteAdapter({ dbPath: join(tmpDir, 'test.db') });
-  await storage.initialize();
-  auth = new TokenAuthAdapter({ secret, storage });
-});
-
-afterEach(async () => {
-  await storage.close();
-  rmSync(tmpDir, { recursive: true, force: true });
-});
-
-describe('parseCookie', () => {
-  it('extracts named cookie from header', () => {
-    expect(parseCookie('foo=bar; punchlist_session=abc123; baz=qux', 'punchlist_session')).toBe(
-      'abc123',
-    );
+describe('generateToken / validateToken', () => {
+  it('generates a valid token that validates to the correct email', () => {
+    const token = generateToken(secret, 'alice@example.com');
+    const result = validateToken(secret, token);
+    expect(result.valid).toBe(true);
+    expect(result.email).toBe('alice@example.com');
   });
 
-  it('returns undefined for missing cookie', () => {
-    expect(parseCookie('foo=bar', 'punchlist_session')).toBeUndefined();
+  it('generates different tokens for the same email (nonce randomness)', () => {
+    const t1 = generateToken(secret, 'alice@example.com');
+    const t2 = generateToken(secret, 'alice@example.com');
+    expect(t1).not.toBe(t2);
   });
 
-  it('returns undefined for undefined header', () => {
-    expect(parseCookie(undefined, 'punchlist_session')).toBeUndefined();
+  it('generates base64url-safe tokens (no +, /, or =)', () => {
+    const token = generateToken(secret, 'alice@example.com');
+    expect(token).not.toMatch(/[+/=]/);
   });
 
-  it('handles cookie with = in value', () => {
-    expect(parseCookie('token=abc=def', 'token')).toBe('abc=def');
+  it('rejects a tampered token', () => {
+    const token = generateToken(secret, 'alice@example.com');
+    const tampered = token.slice(0, -2) + 'XX';
+    expect(validateToken(secret, tampered).valid).toBe(false);
   });
 
-  it('handles empty header', () => {
-    expect(parseCookie('', 'punchlist_session')).toBeUndefined();
-  });
-});
-
-describe('buildSetCookie', () => {
-  it('builds correct Set-Cookie header', () => {
-    const cookie = buildSetCookie('punchlist_session', 'sid123', { secure: false });
-    expect(cookie).toContain('punchlist_session=sid123');
-    expect(cookie).toContain('HttpOnly');
-    expect(cookie).toContain('SameSite=Lax');
-    expect(cookie).toContain('Path=/');
-    expect(cookie).toContain('Max-Age=');
-    expect(cookie).not.toContain('Secure');
+  it('rejects a token signed with a different secret', () => {
+    const token = generateToken(secret, 'alice@example.com');
+    expect(validateToken('different-secret-also-long-enough', token).valid).toBe(false);
   });
 
-  it('includes Secure flag when specified', () => {
-    const cookie = buildSetCookie('punchlist_session', 'sid123', { secure: true });
-    expect(cookie).toContain('Secure');
+  it('rejects garbage inputs', () => {
+    expect(validateToken(secret, '').valid).toBe(false);
+    expect(validateToken(secret, 'not-a-token').valid).toBe(false);
+    expect(validateToken(secret, 'YWJj').valid).toBe(false);
+  });
+
+  it('handles emails with special characters', () => {
+    const token = generateToken(secret, 'user+tag@example.com');
+    const result = validateToken(secret, token);
+    expect(result.valid).toBe(true);
+    expect(result.email).toBe('user+tag@example.com');
   });
 });
 
-describe('buildClearCookie', () => {
-  it('builds clear cookie with Max-Age=0', () => {
-    const cookie = buildClearCookie('punchlist_session', { secure: false });
-    expect(cookie).toContain('punchlist_session=');
-    expect(cookie).toContain('Max-Age=0');
-    expect(cookie).toContain('HttpOnly');
+describe('hashToken', () => {
+  it('returns a 64-character hex string (SHA-256)', () => {
+    const token = generateToken(secret, 'alice@example.com');
+    const hash = hashToken(token);
+    expect(hash).toHaveLength(64);
+    expect(hash).toMatch(/^[0-9a-f]+$/);
+  });
+
+  it('returns the same hash for the same token', () => {
+    const token = generateToken(secret, 'alice@example.com');
+    expect(hashToken(token)).toBe(hashToken(token));
+  });
+
+  it('returns different hashes for different tokens', () => {
+    const t1 = generateToken(secret, 'alice@example.com');
+    const t2 = generateToken(secret, 'alice@example.com');
+    expect(hashToken(t1)).not.toBe(hashToken(t2));
   });
 });
 
-describe('handleLogin', () => {
-  it('creates session and returns cookie for valid invite token', async () => {
-    const invite = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-
-    const result = await handleLogin(auth, invite.token, { secure: false });
-
-    expect('sessionId' in result).toBe(true);
-    if ('sessionId' in result) {
-      expect(result.sessionId).toBeTruthy();
-      expect(result.cookie).toContain('punchlist_session=');
-    }
-  });
-
-  it('returns error for invalid token', async () => {
-    const result = await handleLogin(auth, 'invalid-token', { secure: false });
-
-    expect('error' in result).toBe(true);
-    if ('error' in result) {
-      expect(result.status).toBe(401);
-    }
-  });
-
-  it('rejects a valid HMAC token that was not used for invite', async () => {
-    await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-    // Generate a fresh token — valid HMAC but hash doesn't match stored user
-    const freshToken = auth.generateToken('alice@example.com');
-
-    const result = await handleLogin(auth, freshToken, { secure: false });
-
-    expect('error' in result).toBe(true);
-    if ('error' in result) {
-      expect(result.status).toBe(401);
-    }
-  });
-
-  it('returns error for revoked user', async () => {
-    const invite = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-    await auth.revokeAccess('alice@example.com');
-
-    const result = await handleLogin(auth, invite.token, { secure: false });
-
-    expect('error' in result).toBe(true);
-    if ('error' in result) {
-      expect(result.status).toBe(403);
-    }
-  });
-});
-
-describe('handleLogout', () => {
-  it('clears session and returns clear-cookie', async () => {
-    await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-    const sessionId = await auth.createSession('alice@example.com');
-
-    const result = await handleLogout(auth, sessionId, { secure: false });
-
-    expect(result.cookie).toContain('Max-Age=0');
-
-    // Session should be destroyed
-    const user = await auth.validateSession(sessionId);
-    expect(user).toBeNull();
-  });
-});
-
-describe('authenticateRequest', () => {
-  it('returns user for valid session cookie', async () => {
-    await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-    const sessionId = await auth.createSession('alice@example.com');
-    const cookieHeader = `punchlist_session=${sessionId}`;
-
-    const user = await authenticateRequest(auth, cookieHeader);
-    expect(user).not.toBeNull();
-    expect(user!.email).toBe('alice@example.com');
-  });
-
-  it('returns null for expired session', async () => {
-    const shortAuth = new TokenAuthAdapter({ secret, storage, sessionTtlMs: 1 });
-    await shortAuth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-    const sessionId = await shortAuth.createSession('alice@example.com');
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    const cookieHeader = `punchlist_session=${sessionId}`;
-    const user = await authenticateRequest(shortAuth, cookieHeader);
-    expect(user).toBeNull();
-  });
-
-  it('returns null for revoked user', async () => {
-    await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-    const sessionId = await auth.createSession('alice@example.com');
-    await auth.revokeAccess('alice@example.com');
-
-    const cookieHeader = `punchlist_session=${sessionId}`;
-    const user = await authenticateRequest(auth, cookieHeader);
-    expect(user).toBeNull();
-  });
-
-  it('returns null when no cookie header', async () => {
-    const user = await authenticateRequest(auth, undefined);
-    expect(user).toBeNull();
-  });
-
-  it('returns null when session cookie missing from header', async () => {
-    const user = await authenticateRequest(auth, 'other_cookie=value');
-    expect(user).toBeNull();
+describe('buildInviteUrl', () => {
+  it('builds an invite URL with the token as a query parameter', () => {
+    const token = generateToken(secret, 'alice@example.com');
+    const url = buildInviteUrl('https://app.example.com', token);
+    const parsed = new URL(url);
+    expect(parsed.pathname).toBe('/join');
+    expect(parsed.searchParams.get('token')).toBe(token);
   });
 });

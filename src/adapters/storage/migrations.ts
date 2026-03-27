@@ -127,6 +127,13 @@ export const migrations: Migration[] = [
       CREATE INDEX idx_access_requests_project_id ON access_requests(project_id);
     `,
   },
+  {
+    version: 5,
+    description: 'Add password_hash column to users table',
+    up: `
+      ALTER TABLE users ADD COLUMN password_hash TEXT;
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

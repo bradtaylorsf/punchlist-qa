@@ -377,215 +377,61 @@ describe('users', () => {
   });
 });
 
-// --- Sessions ---
+// --- Password hash methods ---
 
-describe('sessions', () => {
-  let futureExpiry: string;
-  let pastExpiry: string;
-
-  beforeEach(() => {
-    futureExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour from now
-    pastExpiry = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // 1 hour ago
+describe('password hash methods', () => {
+  it('returns null for password hash when not set', async () => {
+    await adapter.createUser({
+      email: 'alice@example.com',
+      name: 'Alice',
+      tokenHash: 'hash123',
+      role: 'tester',
+      invitedBy: 'admin@example.com',
+    });
+    expect(await adapter.getUserPasswordHash('alice@example.com')).toBeNull();
   });
 
-  describe('createSession', () => {
-    it('should create a session and return a Session object', async () => {
-      const user = await adapter.createUser({
-        email: 'alice@example.com',
-        name: 'Alice',
-        tokenHash: 'hash123',
-        role: 'tester',
-        invitedBy: 'admin@example.com',
-      });
-
-      const session = await adapter.createSession(user.email, futureExpiry);
-
-      expect(session.userEmail).toBe('alice@example.com');
-      expect(session.expiresAt).toBe(futureExpiry);
-      expect(session.id).toMatch(/^[0-9a-f]{64}$/); // 32 random bytes as hex
-      expect(session.createdAt).toBeDefined();
+  it('stores password hash via createUser', async () => {
+    await adapter.createUser({
+      email: 'alice@example.com',
+      name: 'Alice',
+      tokenHash: 'hash123',
+      role: 'tester',
+      invitedBy: 'admin@example.com',
+      passwordHash: 'bcrypt-hash-value',
     });
-
-    it('should generate a unique session ID for each call', async () => {
-      const user = await adapter.createUser({
-        email: 'bob@example.com',
-        name: 'Bob',
-        tokenHash: 'hash456',
-        role: 'tester',
-        invitedBy: 'admin@example.com',
-      });
-
-      const session1 = await adapter.createSession(user.email, futureExpiry);
-      const session2 = await adapter.createSession(user.email, futureExpiry);
-
-      expect(session1.id).not.toBe(session2.id);
-    });
-
-    it('should throw when creating a session for a non-existent user (FK constraint)', async () => {
-      await expect(
-        adapter.createSession('nonexistent@example.com', futureExpiry),
-      ).rejects.toThrow();
-    });
+    expect(await adapter.getUserPasswordHash('alice@example.com')).toBe('bcrypt-hash-value');
   });
 
-  describe('getSession', () => {
-    it('should retrieve an existing session by ID', async () => {
-      const user = await adapter.createUser({
-        email: 'alice@example.com',
-        name: 'Alice',
-        tokenHash: 'hash123',
-        role: 'tester',
-        invitedBy: 'admin@example.com',
-      });
-
-      const created = await adapter.createSession(user.email, futureExpiry);
-      const fetched = await adapter.getSession(created.id);
-
-      expect(fetched).not.toBeNull();
-      expect(fetched!.id).toBe(created.id);
-      expect(fetched!.userEmail).toBe('alice@example.com');
-      expect(fetched!.expiresAt).toBe(futureExpiry);
+  it('updates password hash via updateUserPasswordHash', async () => {
+    await adapter.createUser({
+      email: 'alice@example.com',
+      name: 'Alice',
+      tokenHash: 'hash123',
+      role: 'tester',
+      invitedBy: 'admin@example.com',
     });
-
-    it('should return null for a non-existent session ID', async () => {
-      const result = await adapter.getSession('nonexistentsessionid');
-      expect(result).toBeNull();
-    });
-
-    it('should return an expired session (expiry is not checked by getSession)', async () => {
-      const user = await adapter.createUser({
-        email: 'alice@example.com',
-        name: 'Alice',
-        tokenHash: 'hash123',
-        role: 'tester',
-        invitedBy: 'admin@example.com',
-      });
-
-      const session = await adapter.createSession(user.email, pastExpiry);
-      const fetched = await adapter.getSession(session.id);
-
-      // getSession does not filter by expiry — callers must check expiresAt
-      expect(fetched).not.toBeNull();
-      expect(fetched!.id).toBe(session.id);
-      expect(fetched!.expiresAt).toBe(pastExpiry);
-    });
+    await adapter.updateUserPasswordHash('alice@example.com', 'new-bcrypt-hash');
+    expect(await adapter.getUserPasswordHash('alice@example.com')).toBe('new-bcrypt-hash');
   });
 
-  describe('getSessionWithUser', () => {
-    it('should return session and full user data via JOIN', async () => {
-      const user = await adapter.createUser({
-        email: 'alice@example.com',
-        name: 'Alice',
-        tokenHash: 'hash123',
-        role: 'tester',
-        invitedBy: 'admin@example.com',
-      });
+  it('returns null for non-existent user password hash', async () => {
+    expect(await adapter.getUserPasswordHash('nobody@example.com')).toBeNull();
+  });
+});
 
-      const created = await adapter.createSession(user.email, futureExpiry);
-      const result = await adapter.getSessionWithUser(created.id);
+// --- countUsers ---
 
-      expect(result).not.toBeNull();
-      expect(result!.session.id).toBe(created.id);
-      expect(result!.session.userEmail).toBe('alice@example.com');
-      expect(result!.session.expiresAt).toBe(futureExpiry);
-
-      expect(result!.user.id).toBe(user.id);
-      expect(result!.user.email).toBe('alice@example.com');
-      expect(result!.user.name).toBe('Alice');
-      expect(result!.user.tokenHash).toBe('hash123');
-      expect(result!.user.role).toBe('tester');
-      expect(result!.user.invitedBy).toBe('admin@example.com');
-      expect(result!.user.revoked).toBe(false);
-      expect(result!.user.createdAt).toBeDefined();
-    });
-
-    it('should return null for a non-existent session ID', async () => {
-      const result = await adapter.getSessionWithUser('nonexistentsessionid');
-      expect(result).toBeNull();
-    });
+describe('countUsers', () => {
+  it('returns 0 when no users exist', async () => {
+    expect(await adapter.countUsers()).toBe(0);
   });
 
-  describe('deleteSession', () => {
-    it('should delete an existing session', async () => {
-      const user = await adapter.createUser({
-        email: 'alice@example.com',
-        name: 'Alice',
-        tokenHash: 'hash123',
-        role: 'tester',
-        invitedBy: 'admin@example.com',
-      });
-
-      const session = await adapter.createSession(user.email, futureExpiry);
-      await adapter.deleteSession(session.id);
-
-      const fetched = await adapter.getSession(session.id);
-      expect(fetched).toBeNull();
-    });
-
-    it('should be idempotent when deleting a non-existent session', async () => {
-      await expect(adapter.deleteSession('nonexistentsessionid')).resolves.toBeUndefined();
-    });
-  });
-
-  describe('deleteExpiredSessions', () => {
-    it('should delete only expired sessions and leave valid ones intact', async () => {
-      const user = await adapter.createUser({
-        email: 'alice@example.com',
-        name: 'Alice',
-        tokenHash: 'hash123',
-        role: 'tester',
-        invitedBy: 'admin@example.com',
-      });
-
-      const validSession = await adapter.createSession(user.email, futureExpiry);
-      const expiredSession = await adapter.createSession(user.email, pastExpiry);
-
-      await adapter.deleteExpiredSessions();
-
-      const validFetched = await adapter.getSession(validSession.id);
-      expect(validFetched).not.toBeNull();
-      expect(validFetched!.id).toBe(validSession.id);
-
-      const expiredFetched = await adapter.getSession(expiredSession.id);
-      expect(expiredFetched).toBeNull();
-    });
-
-    it('should be a no-op when there are no expired sessions', async () => {
-      const user = await adapter.createUser({
-        email: 'alice@example.com',
-        name: 'Alice',
-        tokenHash: 'hash123',
-        role: 'tester',
-        invitedBy: 'admin@example.com',
-      });
-
-      const session = await adapter.createSession(user.email, futureExpiry);
-      await expect(adapter.deleteExpiredSessions()).resolves.toBeUndefined();
-
-      const fetched = await adapter.getSession(session.id);
-      expect(fetched).not.toBeNull();
-    });
-
-    it('should delete all sessions when all are expired', async () => {
-      const user = await adapter.createUser({
-        email: 'alice@example.com',
-        name: 'Alice',
-        tokenHash: 'hash123',
-        role: 'tester',
-        invitedBy: 'admin@example.com',
-      });
-
-      const exp1 = await adapter.createSession(user.email, pastExpiry);
-      const exp2 = await adapter.createSession(
-        user.email,
-        new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      );
-
-      await adapter.deleteExpiredSessions();
-
-      expect(await adapter.getSession(exp1.id)).toBeNull();
-      expect(await adapter.getSession(exp2.id)).toBeNull();
-    });
+  it('returns correct count after user creation', async () => {
+    await adapter.createUser({ email: 'alice@example.com', name: 'Alice', tokenHash: 'h1', role: 'tester', invitedBy: 'admin@example.com' });
+    expect(await adapter.countUsers()).toBe(1);
+    await adapter.createUser({ email: 'bob@example.com', name: 'Bob', tokenHash: 'h2', role: 'tester', invitedBy: 'admin@example.com' });
+    expect(await adapter.countUsers()).toBe(2);
   });
 });
 

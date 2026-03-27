@@ -11,8 +11,11 @@ interface UserInfo {
 interface AuthContextValue {
   user: UserInfo | null;
   loading: boolean;
+  setupRequired: boolean;
   login: (token: string) => Promise<void>;
+  loginWithPassword: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -20,28 +23,43 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [setupRequired, setSetupRequired] = useState(false);
+
+  const refreshAuth = useCallback(async () => {
+    const res = await api.getAuthStatus();
+    setSetupRequired(res.data.setupRequired);
+    setUser(res.data.user);
+  }, []);
 
   useEffect(() => {
-    api
-      .getMe()
-      .then((res) => setUser(res.data))
-      .catch(() => setUser(null))
+    refreshAuth()
+      .catch(() => {
+        setUser(null);
+        setSetupRequired(false);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshAuth]);
 
   const login = useCallback(async (token: string) => {
     await api.login(token);
-    const res = await api.getMe();
-    setUser(res.data);
-  }, []);
+    await refreshAuth();
+  }, [refreshAuth]);
+
+  const loginWithPassword = useCallback(async (email: string, password: string) => {
+    await api.loginWithPassword(email, password);
+    await refreshAuth();
+  }, [refreshAuth]);
 
   const logout = useCallback(async () => {
     await api.logout();
     setUser(null);
+    setSetupRequired(false);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, loading, setupRequired, login, loginWithPassword, logout, refreshAuth }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 

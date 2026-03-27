@@ -2,7 +2,6 @@ import type {
   Round,
   Result,
   User,
-  Session,
   AccessRequest,
   Project,
   ProjectUser,
@@ -107,6 +106,15 @@ export interface StorageAdapter {
   /** Update a user's token hash (for token regeneration) */
   updateUserTokenHash(email: string, newTokenHash: string): Promise<void>;
 
+  /** Update a user's password hash */
+  updateUserPasswordHash(email: string, passwordHash: string): Promise<void>;
+
+  /** Get a user's stored password hash, or null if none set */
+  getUserPasswordHash(email: string): Promise<string | null>;
+
+  /** Count total number of users (used to detect first-run setup) */
+  countUsers(): Promise<number>;
+
   // --- Config (key-value) ---
 
   /** Get a config value by key, or null if not set */
@@ -114,23 +122,6 @@ export interface StorageAdapter {
 
   /** Set a config value (insert or update) */
   setConfig(key: string, value: string): Promise<void>;
-
-  // --- Sessions ---
-
-  /** Create a new session */
-  createSession(userEmail: string, expiresAt: string): Promise<Session>;
-
-  /** Get a session by ID, or null if not found */
-  getSession(id: string): Promise<Session | null>;
-
-  /** Get a session with its associated user in a single query, or null if not found */
-  getSessionWithUser(id: string): Promise<{ session: Session; user: User } | null>;
-
-  /** Delete a session by ID */
-  deleteSession(id: string): Promise<void>;
-
-  /** Delete all expired sessions */
-  deleteExpiredSessions(): Promise<void>;
 
   // --- Access Requests ---
 

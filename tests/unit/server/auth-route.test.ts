@@ -1,24 +1,73 @@
+/**
+ * Tests for the new Passport-based auth routes.
+ * The authRouter now accepts StorageAdapter + sessionSecret.
+ * These tests use a mock storage adapter and simulate Passport session state.
+ */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import express from 'express';
+import passport from 'passport';
+import session from 'express-session';
 import http from 'node:http';
-import type { AuthAdapter } from '../../../src/adapters/auth/types.js';
+import type { StorageAdapter } from '../../../src/adapters/storage/types.js';
 import { authRouter } from '../../../src/server/routes/auth.js';
 import { errorHandler } from '../../../src/server/middleware/error-handler.js';
-import { RevokedUserError } from '../../../src/adapters/auth/errors.js';
+import { configurePassport } from '../../../src/server/auth/passport-config.js';
+import { generateToken, hashToken } from '../../../src/server/auth/invite.js';
 
-function createMockAuthAdapter(overrides: Partial<AuthAdapter> = {}): AuthAdapter {
+const SESSION_SECRET = 'test-secret-at-least-16-characters-long';
+
+const mockUser = {
+  id: 'u1',
+  email: 'admin@example.com',
+  name: 'Admin',
+  tokenHash: 'hash-123',
+  role: 'admin' as const,
+  invitedBy: 'self-setup',
+  revoked: false,
+  createdAt: '2024-01-01T00:00:00.000Z',
+};
+
+function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdapter {
   return {
-    generateToken: vi.fn(),
-    validateToken: vi.fn(),
-    createInvite: vi.fn(),
-    revokeAccess: vi.fn(),
-    listUsers: vi.fn(),
-    loginWithToken: vi.fn().mockResolvedValue('session-123'),
-    createSession: vi.fn(),
-    validateSession: vi.fn(),
-    destroySession: vi.fn(),
+    initialize: vi.fn(),
+    close: vi.fn(),
+    createRound: vi.fn(),
+    listRounds: vi.fn(),
+    getRound: vi.fn(),
+    updateRound: vi.fn(),
+    submitResult: vi.fn(),
+    listResults: vi.fn(),
+    deleteResult: vi.fn(),
+    deleteResultsByTestIds: vi.fn(),
+    updateResultIssue: vi.fn(),
+    createUser: vi.fn().mockResolvedValue(mockUser),
+    listUsers: vi.fn().mockResolvedValue([mockUser]),
+    getUserByEmail: vi.fn().mockResolvedValue(mockUser),
+    getUserByTokenHash: vi.fn().mockResolvedValue(mockUser),
+    revokeUser: vi.fn(),
+    updateUserTokenHash: vi.fn().mockResolvedValue(undefined),
+    updateUserPasswordHash: vi.fn().mockResolvedValue(undefined),
+    getUserPasswordHash: vi.fn().mockResolvedValue('$2a$12$hashed-password'),
+    countUsers: vi.fn().mockResolvedValue(1),
+    getConfig: vi.fn(),
+    setConfig: vi.fn(),
+    createAccessRequest: vi.fn(),
+    listAccessRequests: vi.fn(),
+    getAccessRequest: vi.fn(),
+    getAccessRequestByEmail: vi.fn(),
+    updateAccessRequestStatus: vi.fn(),
+    createProject: vi.fn(),
+    getProject: vi.fn(),
+    getProjectByRepoSlug: vi.fn(),
+    listProjects: vi.fn(),
+    updateProject: vi.fn(),
+    deleteProject: vi.fn(),
+    addUserToProject: vi.fn(),
+    removeUserFromProject: vi.fn(),
+    listProjectUsers: vi.fn(),
+    listUserProjects: vi.fn(),
     ...overrides,
-  } as AuthAdapter;
+  } as unknown as StorageAdapter;
 }
 
 function makeRequest(
@@ -54,17 +103,9 @@ function makeRequest(
         res.on('data', (chunk) => (resBody += chunk));
         res.on('end', () => {
           try {
-            resolve({
-              status: res.statusCode!,
-              headers: res.headers,
-              body: JSON.parse(resBody),
-            });
+            resolve({ status: res.statusCode!, headers: res.headers, body: JSON.parse(resBody) });
           } catch {
-            resolve({
-              status: res.statusCode!,
-              headers: res.headers,
-              body: { raw: resBody },
-            });
+            resolve({ status: res.statusCode!, headers: res.headers, body: { raw: resBody } });
           }
         });
       },
@@ -84,97 +125,205 @@ describe('auth routes', () => {
     }
   });
 
-  function createServer(adapter: AuthAdapter) {
+  function createServer(storage: StorageAdapter) {
+    configurePassport(storage);
+
     const app = express();
     app.use(express.json());
-    app.use('/api/auth', authRouter(adapter));
+    app.use(
+      session({
+        secret: SESSION_SECRET,
+        resave: false,
+        saveUninitialized: false,
+        cookie: { httpOnly: true, sameSite: 'lax' },
+      }),
+    );
+    app.use(passport.initialize());
+    app.use(passport.session());
+    app.use('/api/auth', authRouter(storage, SESSION_SECRET));
     app.use(errorHandler);
     server = app.listen(0);
     return server;
   }
 
-  describe('POST /api/auth/login', () => {
-    it('returns 200 with Set-Cookie on valid token', async () => {
-      const adapter = createMockAuthAdapter();
-      createServer(adapter);
+  describe('GET /api/auth/status', () => {
+    it('returns setupRequired: true when no users exist', async () => {
+      const storage = createMockStorage({ countUsers: vi.fn().mockResolvedValue(0) });
+      createServer(storage);
 
-      const res = await makeRequest(server, 'POST', '/api/auth/login', {
-        token: 'valid-token',
-      });
-
+      const res = await makeRequest(server, 'GET', '/api/auth/status');
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      const setCookie = res.headers['set-cookie'];
-      expect(setCookie).toBeDefined();
-      expect(String(setCookie)).toContain('punchlist_session=session-123');
+      const data = res.body.data as Record<string, unknown>;
+      expect(data.setupRequired).toBe(true);
+      expect(data.user).toBeNull();
     });
 
-    it('returns 400 for missing token', async () => {
-      const adapter = createMockAuthAdapter();
-      createServer(adapter);
+    it('returns setupRequired: false when users exist', async () => {
+      const storage = createMockStorage({ countUsers: vi.fn().mockResolvedValue(1) });
+      createServer(storage);
 
-      const res = await makeRequest(server, 'POST', '/api/auth/login', {});
+      const res = await makeRequest(server, 'GET', '/api/auth/status');
+      expect(res.status).toBe(200);
+      const data = res.body.data as Record<string, unknown>;
+      expect(data.setupRequired).toBe(false);
+      expect(data.user).toBeNull();
+    });
+  });
 
+  describe('POST /api/auth/setup', () => {
+    it('returns 409 when users already exist', async () => {
+      const storage = createMockStorage({ countUsers: vi.fn().mockResolvedValue(1) });
+      createServer(storage);
+
+      const res = await makeRequest(server, 'POST', '/api/auth/setup', {
+        email: 'admin@example.com',
+        name: 'Admin',
+        password: 'secure-password-123',
+      });
+      expect(res.status).toBe(409);
+    });
+
+    it('returns 400 for short password', async () => {
+      const storage = createMockStorage({ countUsers: vi.fn().mockResolvedValue(0) });
+      createServer(storage);
+
+      const res = await makeRequest(server, 'POST', '/api/auth/setup', {
+        email: 'admin@example.com',
+        name: 'Admin',
+        password: 'short',
+      });
       expect(res.status).toBe(400);
-      expect(res.body.success).toBe(false);
     });
 
-    it('returns 401 for invalid token', async () => {
-      const adapter = createMockAuthAdapter({
-        loginWithToken: vi.fn().mockRejectedValue(new Error('Invalid token')),
+    it('creates admin user with password and logs in when no users exist', async () => {
+      const storage = createMockStorage({
+        countUsers: vi.fn().mockResolvedValue(0),
+        createUser: vi.fn().mockResolvedValue({
+          ...mockUser,
+          invitedBy: 'self-setup',
+        }),
       });
-      createServer(adapter);
+      createServer(storage);
 
-      const res = await makeRequest(server, 'POST', '/api/auth/login', {
-        token: 'bad-token',
+      const res = await makeRequest(server, 'POST', '/api/auth/setup', {
+        email: 'admin@example.com',
+        name: 'Admin',
+        password: 'secure-password-123',
       });
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(storage.createUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'admin@example.com',
+          name: 'Admin',
+          role: 'admin',
+          invitedBy: 'self-setup',
+        }),
+      );
+    });
+  });
 
+  describe('POST /api/auth/login (token)', () => {
+    it('returns 200 with user info for valid invite token', async () => {
+      // Generate a real signed token so validateToken passes
+      const token = generateToken(SESSION_SECRET, 'admin@example.com');
+      const tokenHash = hashToken(token);
+
+      const storage = createMockStorage({
+        getUserByTokenHash: vi.fn().mockResolvedValue({ ...mockUser, tokenHash }),
+        getUserByEmail: vi.fn().mockResolvedValue({ ...mockUser, tokenHash }),
+      });
+      createServer(storage);
+
+      const res = await makeRequest(server, 'POST', '/api/auth/login', { token });
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      const data = res.body.data as Record<string, unknown>;
+      expect(data.email).toBe('admin@example.com');
+      expect(data.tokenHash).toBeUndefined(); // stripped from response
+    });
+
+    it('returns 401 for invalid token signature', async () => {
+      const storage = createMockStorage();
+      createServer(storage);
+
+      const res = await makeRequest(server, 'POST', '/api/auth/login', { token: 'invalid-token' });
       expect(res.status).toBe(401);
-      expect(res.body.success).toBe(false);
-      expect(res.body.error).toBe('Invalid token');
+    });
+
+    it('returns 401 for valid HMAC token not found in storage', async () => {
+      const token = generateToken(SESSION_SECRET, 'admin@example.com');
+      const storage = createMockStorage({
+        getUserByTokenHash: vi.fn().mockResolvedValue(null),
+      });
+      createServer(storage);
+
+      const res = await makeRequest(server, 'POST', '/api/auth/login', { token });
+      expect(res.status).toBe(401);
     });
 
     it('returns 403 for revoked user', async () => {
-      const adapter = createMockAuthAdapter({
-        loginWithToken: vi
-          .fn()
-          .mockRejectedValue(new RevokedUserError('revoked@example.com')),
-      });
-      createServer(adapter);
+      const token = generateToken(SESSION_SECRET, 'admin@example.com');
+      const tokenHash = hashToken(token);
 
-      const res = await makeRequest(server, 'POST', '/api/auth/login', {
-        token: 'revoked-token',
+      const storage = createMockStorage({
+        getUserByTokenHash: vi.fn().mockResolvedValue({ ...mockUser, tokenHash, revoked: true }),
       });
+      createServer(storage);
 
+      const res = await makeRequest(server, 'POST', '/api/auth/login', { token });
       expect(res.status).toBe(403);
-      expect(res.body.success).toBe(false);
     });
   });
 
   describe('POST /api/auth/logout', () => {
-    it('clears session cookie', async () => {
-      const adapter = createMockAuthAdapter();
-      createServer(adapter);
-
-      const res = await makeRequest(server, 'POST', '/api/auth/logout', undefined, {
-        Cookie: 'punchlist_session=session-123',
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      const setCookie = String(res.headers['set-cookie']);
-      expect(setCookie).toContain('Max-Age=0');
-      expect(adapter.destroySession).toHaveBeenCalledWith('session-123');
-    });
-
-    it('returns 200 even without cookie', async () => {
-      const adapter = createMockAuthAdapter();
-      createServer(adapter);
+    it('returns 200 even without an active session', async () => {
+      const storage = createMockStorage();
+      createServer(storage);
 
       const res = await makeRequest(server, 'POST', '/api/auth/logout');
-
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
+    });
+  });
+
+  describe('POST /api/auth/set-password', () => {
+    it('returns 401 for invalid token', async () => {
+      const storage = createMockStorage();
+      createServer(storage);
+
+      const res = await makeRequest(server, 'POST', '/api/auth/set-password', {
+        token: 'garbage',
+        password: 'newpassword123',
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 400 for short password', async () => {
+      const token = generateToken(SESSION_SECRET, 'admin@example.com');
+      const storage = createMockStorage();
+      createServer(storage);
+
+      const res = await makeRequest(server, 'POST', '/api/auth/set-password', {
+        token,
+        password: 'short',
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 401 when token hash not found in storage', async () => {
+      const token = generateToken(SESSION_SECRET, 'admin@example.com');
+      const storage = createMockStorage({
+        getUserByTokenHash: vi.fn().mockResolvedValue(null),
+      });
+      createServer(storage);
+
+      const res = await makeRequest(server, 'POST', '/api/auth/set-password', {
+        token,
+        password: 'newpassword123',
+      });
+      expect(res.status).toBe(401);
     });
   });
 });

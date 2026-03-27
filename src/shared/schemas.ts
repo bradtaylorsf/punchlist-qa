@@ -181,7 +181,8 @@ export const createUserInputSchema = z.object({
   name: z.string().min(1),
   tokenHash: z.string().min(1),
   role: userRoleSchema.default('tester'),
-  invitedBy: z.string().email(),
+  invitedBy: z.string().min(1),
+  passwordHash: z.string().optional(),
 });
 
 export const inviteUserRequestSchema = z.object({
@@ -242,6 +243,27 @@ export const createSupportTicketOptsSchema = z.object({
 
 export const loginRequestSchema = z.object({
   token: z.string().min(1, 'Token is required'),
+});
+
+export const passwordLoginRequestSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+export const setupRequestSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1),
+  password: z.string().min(8).max(128),
+});
+
+export const setPasswordRequestSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8).max(128),
+});
+
+export const changePasswordRequestSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(128),
 });
 
 // --- Widget request schema (incoming from browser widget → server) ---
@@ -415,6 +437,10 @@ export type CreateSupportTicketOpts = z.infer<typeof createSupportTicketOptsSche
 export type LabelDef = z.infer<typeof labelDefSchema>;
 export type SupportTicketRequest = z.infer<typeof supportTicketRequestSchema>;
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
+export type PasswordLoginRequest = z.infer<typeof passwordLoginRequestSchema>;
+export type SetupRequest = z.infer<typeof setupRequestSchema>;
+export type SetPasswordRequest = z.infer<typeof setPasswordRequestSchema>;
+export type ChangePasswordRequest = z.infer<typeof changePasswordRequestSchema>;
 export type AccessRequestStatus = z.infer<typeof accessRequestStatusSchema>;
 export type AccessRequest = z.infer<typeof accessRequestSchema>;
 export type CreateAccessRequestInput = z.infer<typeof createAccessRequestInputSchema>;

@@ -3,12 +3,13 @@ import express from 'express';
 import http from 'node:http';
 import type { Request, Response, NextFunction } from 'express';
 import type { StorageAdapter } from '../../../src/adapters/storage/types.js';
-import type { AuthAdapter } from '../../../src/adapters/auth/types.js';
 import {
   publicAccessRequestRouter,
   adminAccessRequestRouter,
 } from '../../../src/server/routes/access-requests.js';
 import { errorHandler } from '../../../src/server/middleware/error-handler.js';
+
+const SESSION_SECRET = 'test-secret-at-least-16-characters-long';
 
 const mockAdmin = {
   id: 'u1',
@@ -44,6 +45,17 @@ const mockAccessRequest = {
   projectId: null,
 };
 
+const mockCreatedUser = {
+  id: 'u3',
+  email: 'requester@example.com',
+  name: 'New User',
+  tokenHash: 'tok-hash-123',
+  role: 'tester' as const,
+  invitedBy: 'admin@example.com',
+  revoked: false,
+  createdAt: '2024-01-01T00:00:00.000Z',
+};
+
 function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdapter {
   return {
     initialize: vi.fn(),
@@ -57,19 +69,17 @@ function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdap
     deleteResult: vi.fn(),
     deleteResultsByTestIds: vi.fn(),
     updateResultIssue: vi.fn(),
-    createUser: vi.fn(),
+    createUser: vi.fn().mockResolvedValue(mockCreatedUser),
     listUsers: vi.fn(),
     getUserByEmail: vi.fn().mockResolvedValue(null),
     getUserByTokenHash: vi.fn(),
     revokeUser: vi.fn(),
     updateUserTokenHash: vi.fn(),
+    updateUserPasswordHash: vi.fn(),
+    getUserPasswordHash: vi.fn(),
+    countUsers: vi.fn(),
     getConfig: vi.fn(),
     setConfig: vi.fn(),
-    createSession: vi.fn(),
-    getSession: vi.fn(),
-    getSessionWithUser: vi.fn(),
-    deleteSession: vi.fn(),
-    deleteExpiredSessions: vi.fn(),
     createAccessRequest: vi.fn().mockResolvedValue(mockAccessRequest),
     listAccessRequests: vi.fn().mockResolvedValue([mockAccessRequest]),
     getAccessRequest: vi.fn().mockResolvedValue(mockAccessRequest),
@@ -86,26 +96,7 @@ function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdap
     listProjectUsers: vi.fn(),
     listUserProjects: vi.fn(),
     ...overrides,
-  };
-}
-
-function createMockAuthAdapter(overrides: Partial<AuthAdapter> = {}): AuthAdapter {
-  return {
-    generateToken: vi.fn(),
-    validateToken: vi.fn(),
-    createInvite: vi.fn().mockResolvedValue({
-      user: { ...mockTester, email: 'requester@example.com', name: 'New User' },
-      token: 'tok-123',
-      inviteUrl: 'http://localhost:4747?token=tok-123',
-    }),
-    revokeAccess: vi.fn(),
-    listUsers: vi.fn().mockResolvedValue([]),
-    loginWithToken: vi.fn(),
-    createSession: vi.fn(),
-    validateSession: vi.fn(),
-    destroySession: vi.fn(),
-    ...overrides,
-  } as AuthAdapter;
+  } as unknown as StorageAdapter;
 }
 
 function injectUser(user: typeof mockAdmin) {
@@ -163,8 +154,8 @@ describe('access-requests routes', () => {
     }
   });
 
-  function createServer(user?: typeof mockAdmin, authAdapter?: AuthAdapter) {
-    storage = createMockStorage();
+  function createServer(user?: typeof mockAdmin, storageOverride?: StorageAdapter) {
+    storage = storageOverride ?? createMockStorage();
     const app = express();
     app.use(express.json());
 
@@ -174,10 +165,7 @@ describe('access-requests routes', () => {
     // Admin routes (with auth)
     if (user) {
       app.use(injectUser(user));
-      app.use(
-        '/api/access-requests',
-        adminAccessRequestRouter(storage, authAdapter ?? createMockAuthAdapter()),
-      );
+      app.use('/api/access-requests', adminAccessRequestRouter(storage, SESSION_SECRET));
     }
 
     app.use(errorHandler);
@@ -271,10 +259,10 @@ describe('access-requests routes', () => {
   // --- Admin approve ---
 
   it('POST /api/access-requests/:id/approve creates invite and marks approved', async () => {
-    const auth = createMockAuthAdapter();
     const updatedRequest = { ...mockAccessRequest, status: 'approved', reviewedBy: 'admin@example.com' };
     storage = createMockStorage({
       getAccessRequest: vi.fn().mockResolvedValue(mockAccessRequest),
+      createUser: vi.fn().mockResolvedValue(mockCreatedUser),
       updateAccessRequestStatus: vi.fn().mockResolvedValue(updatedRequest),
     });
 
@@ -282,7 +270,7 @@ describe('access-requests routes', () => {
     app.use(express.json());
     app.use('/api/access-requests', publicAccessRequestRouter(storage));
     app.use(injectUser(mockAdmin));
-    app.use('/api/access-requests', adminAccessRequestRouter(storage, auth));
+    app.use('/api/access-requests', adminAccessRequestRouter(storage, SESSION_SECRET));
     app.use(errorHandler);
     server = app.listen(0);
 
@@ -290,8 +278,15 @@ describe('access-requests routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     const data = res.body.data as Record<string, unknown>;
-    expect(data.inviteUrl).toBe('http://localhost:4747?token=tok-123');
-    expect(auth.createInvite).toHaveBeenCalledWith('requester@example.com', 'New User', 'admin@example.com');
+    // inviteUrl is generated from token — just check it's present and is a string
+    expect(typeof data.inviteUrl).toBe('string');
+    expect(data.inviteUrl as string).toContain('/join?token=');
+    expect(storage.createUser).toHaveBeenCalledWith(expect.objectContaining({
+      email: 'requester@example.com',
+      name: 'New User',
+      invitedBy: 'admin@example.com',
+      role: 'tester',
+    }));
     expect(storage.updateAccessRequestStatus).toHaveBeenCalledWith('ar-1', 'approved', 'admin@example.com');
   });
 
@@ -308,7 +303,7 @@ describe('access-requests routes', () => {
     app.use(express.json());
     app.use('/api/access-requests', publicAccessRequestRouter(storage));
     app.use(injectUser(mockAdmin));
-    app.use('/api/access-requests', adminAccessRequestRouter(storage, createMockAuthAdapter()));
+    app.use('/api/access-requests', adminAccessRequestRouter(storage, SESSION_SECRET));
     app.use(errorHandler);
     server = app.listen(0);
 

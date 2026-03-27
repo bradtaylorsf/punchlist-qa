@@ -1,4 +1,5 @@
 import express from 'express';
+import passport from 'passport';
 import type { Express } from 'express';
 import { corsMiddleware } from './middleware/cors.js';
 import { errorHandler } from './middleware/error-handler.js';
@@ -19,10 +20,11 @@ import {
   adminAccessRequestRouter,
 } from './routes/access-requests.js';
 import { dashboardRouter } from './routes/dashboard.js';
+import { createSessionMiddleware } from './auth/session-config.js';
+import { configurePassport } from './auth/passport-config.js';
 import type { IssueAdapter } from '../adapters/issues/types.js';
 import type { IssueAdapterRegistry } from '../adapters/issues/registry.js';
 import type { StorageAdapter } from '../adapters/storage/types.js';
-import type { AuthAdapter } from '../adapters/auth/types.js';
 import type { PunchlistConfig } from '../shared/types.js';
 
 export interface AppDependencies {
@@ -31,7 +33,8 @@ export interface AppDependencies {
   /** Multi-project issue adapter registry (optional, for project-scoped routes) */
   issueAdapterRegistry?: IssueAdapterRegistry;
   storageAdapter?: StorageAdapter;
-  authAdapter?: AuthAdapter;
+  sessionSecret?: string;
+  databaseUrl?: string;
   config?: PunchlistConfig;
   corsDomains: string[];
 }
@@ -42,6 +45,7 @@ export interface AppDependencies {
  */
 export function createApp(deps: AppDependencies): Express {
   const app = express();
+  const sessionSecret = deps.sessionSecret ?? 'dev-fallback-secret-do-not-use-in-production';
 
   // Health check — no auth, no CORS, no body parsing
   app.get('/health', async (_req, res) => {
@@ -58,40 +62,65 @@ export function createApp(deps: AppDependencies): Express {
   // Parse JSON bodies (explicit limit to document intent)
   app.use(express.json({ limit: '100kb' }));
 
+  // Session middleware — must come before passport
+  app.use(
+    createSessionMiddleware({
+      secret: sessionSecret,
+      databaseUrl: deps.databaseUrl,
+    }),
+  );
+
+  // Passport session-based auth
+  if (deps.storageAdapter) {
+    configurePassport(deps.storageAdapter);
+  }
+  app.use(passport.initialize());
+  app.use(passport.session());
+
   // CORS middleware on API routes only
   app.use('/api/support', corsMiddleware(deps.corsDomains));
 
   // Public routes (no auth required)
   app.use('/api/support', supportRouter(deps.issueAdapter));
-  app.use('/api/auth', authRouter(deps.authAdapter ?? createNoopAuthAdapter()));
+
   if (deps.storageAdapter) {
+    app.use('/api/auth', authRouter(deps.storageAdapter, sessionSecret));
     app.use('/api/access-requests', publicAccessRequestRouter(deps.storageAdapter));
   }
 
   // Protected routes (require valid session)
-  if (deps.storageAdapter && deps.authAdapter) {
-    const auth = requireAuth(deps.authAdapter);
+  if (deps.storageAdapter) {
     const storage = deps.storageAdapter;
     const defaultProject = defaultProjectContext(storage);
 
     // --- Project CRUD routes ---
-    app.use('/api/projects', auth, projectsRouter(storage));
+    app.use('/api/projects', requireAuth, projectsRouter(storage));
 
     // --- Project-scoped data routes ---
     const projectScope = requireProjectContext(storage);
-    app.use('/api/projects/:projectId/rounds', auth, projectScope, roundsRouter(storage));
-    app.use('/api/projects/:projectId/rounds', auth, projectScope, resultsRouter(storage));
-    app.use('/api/projects/:projectId/issues', auth, projectScope, issuesRouter(deps.issueAdapter));
-    app.use('/api/projects/:projectId/access-requests', auth, projectScope, adminAccessRequestRouter(storage, deps.authAdapter));
+    app.use('/api/projects/:projectId/rounds', requireAuth, projectScope, roundsRouter(storage));
+    app.use('/api/projects/:projectId/rounds', requireAuth, projectScope, resultsRouter(storage));
+    app.use('/api/projects/:projectId/issues', requireAuth, projectScope, issuesRouter(deps.issueAdapter));
+    app.use(
+      '/api/projects/:projectId/access-requests',
+      requireAuth,
+      projectScope,
+      adminAccessRequestRouter(storage, sessionSecret),
+    );
 
     // --- Legacy unscoped routes (backward compat via default project) ---
-    app.use('/api/rounds', auth, defaultProject, roundsRouter(storage));
-    app.use('/api/rounds', auth, defaultProject, resultsRouter(storage));
-    app.use('/api/config', auth, configRouter(deps.config));
-    app.use('/api/issues', auth, defaultProject, issuesRouter(deps.issueAdapter));
-    app.use('/api/commit', auth, commitRouter());
-    app.use('/api/users', auth, usersRouter(deps.authAdapter));
-    app.use('/api/access-requests', auth, defaultProject, adminAccessRequestRouter(storage, deps.authAdapter));
+    app.use('/api/rounds', requireAuth, defaultProject, roundsRouter(storage));
+    app.use('/api/rounds', requireAuth, defaultProject, resultsRouter(storage));
+    app.use('/api/config', requireAuth, configRouter(deps.config));
+    app.use('/api/issues', requireAuth, defaultProject, issuesRouter(deps.issueAdapter));
+    app.use('/api/commit', requireAuth, commitRouter());
+    app.use('/api/users', requireAuth, usersRouter(storage, sessionSecret));
+    app.use(
+      '/api/access-requests',
+      requireAuth,
+      defaultProject,
+      adminAccessRequestRouter(storage, sessionSecret),
+    );
   }
 
   // Static file serving
@@ -102,23 +131,4 @@ export function createApp(deps: AppDependencies): Express {
   app.use(errorHandler);
 
   return app;
-}
-
-function createNoopAuthAdapter(): AuthAdapter {
-  const fail = (msg: string) => {
-    throw new Error(msg);
-  };
-  const asyncFail = (msg: string) => Promise.reject(new Error(msg));
-  return {
-    generateToken: () => fail('Auth not configured'),
-    validateToken: () => fail('Auth not configured'),
-    createInvite: () => asyncFail('Auth not configured'),
-    revokeAccess: () => asyncFail('Auth not configured'),
-    regenerateToken: () => asyncFail('Auth not configured'),
-    listUsers: () => asyncFail('Auth not configured'),
-    loginWithToken: () => asyncFail('Auth not configured'),
-    createSession: () => asyncFail('Auth not configured'),
-    validateSession: () => asyncFail('Auth not configured'),
-    destroySession: () => asyncFail('Auth not configured'),
-  };
 }

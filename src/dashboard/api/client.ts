@@ -66,10 +66,52 @@ function projectPath(path: string): string {
 }
 
 // Auth
+export function getAuthStatus() {
+  return request<{
+    success: boolean;
+    data: { setupRequired: boolean; user: { email: string; name: string; role: string } | null };
+  }>('/auth/status');
+}
+
 export function login(token: string) {
   return request('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ token }),
+  });
+}
+
+export function loginWithPassword(email: string, password: string) {
+  return request<{ success: boolean; data: Record<string, unknown> }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export function setup(input: { email: string; name: string; password: string }) {
+  return request<{ success: boolean; data: Record<string, unknown> }>('/auth/setup', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function setPassword(token: string, password: string) {
+  return request<{ success: boolean; data: Record<string, unknown> }>('/auth/set-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, password }),
+  });
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+  return request<{ success: boolean }>('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+export function resetPassword(email: string) {
+  return request<{ success: boolean; data: { inviteUrl: string } }>('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
   });
 }
 

@@ -5,12 +5,10 @@ import type { ResolvedConfig } from '../shared/config.js';
 import { CONFIG_FILENAME } from '../shared/constants.js';
 import { createStorageAdapter } from '../adapters/storage/factory.js';
 import type { StorageAdapter } from '../adapters/storage/types.js';
-import { TokenAuthAdapter } from '../adapters/auth/token.js';
 
 export async function initAdapters(cwd?: string): Promise<{
   config: ResolvedConfig;
   storage: StorageAdapter;
-  auth: TokenAuthAdapter;
 }> {
   const dir = cwd ?? process.cwd();
   const configPath = join(dir, CONFIG_FILENAME);
@@ -36,10 +34,5 @@ export async function initAdapters(cwd?: string): Promise<{
   });
   await storage.initialize();
 
-  const auth = new TokenAuthAdapter({
-    secret: config.secrets.authSecret,
-    storage,
-  });
-
-  return { config, storage, auth };
+  return { config, storage };
 }

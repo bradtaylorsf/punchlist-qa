@@ -2,9 +2,9 @@ import { DEFAULT_PORT } from '../../shared/constants.js';
 import { GitHubIssueAdapter } from '../../adapters/issues/index.js';
 import { IssueAdapterRegistry } from '../../adapters/issues/registry.js';
 import { createStorageAdapter } from '../../adapters/storage/factory.js';
-import { TokenAuthAdapter } from '../../adapters/auth/token.js';
 import { createApp } from '../../server/app.js';
 import { initAdapters } from '../helpers.js';
+import { generateToken, hashToken, buildInviteUrl } from '../../server/auth/invite.js';
 import type { StorageAdapter } from '../../adapters/storage/types.js';
 
 export interface ServeOptions {
@@ -80,9 +80,6 @@ async function serveHosted(): Promise<void> {
   });
   await storage.initialize();
 
-  // Create auth adapter
-  const auth = new TokenAuthAdapter({ secret: authSecret, storage });
-
   // Create a placeholder issue adapter (projects use the global token)
   const issueAdapter = new GitHubIssueAdapter('placeholder/repo', githubToken);
   const issueAdapterRegistry = new IssueAdapterRegistry();
@@ -91,7 +88,8 @@ async function serveHosted(): Promise<void> {
     issueAdapter,
     issueAdapterRegistry,
     storageAdapter: storage,
-    authAdapter: auth,
+    sessionSecret: authSecret,
+    databaseUrl,
     config: undefined,
     corsDomains,
   });
@@ -99,6 +97,7 @@ async function serveHosted(): Promise<void> {
   const port = Number(process.env.PORT) || DEFAULT_PORT;
   const host = process.env.HOST || '0.0.0.0';
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+  const baseUrl = `http://${displayHost}:${port}`;
 
   const server = app.listen(port, host, async () => {
     console.log(`\n  Punchlist QA Server (hosted mode)`);
@@ -106,22 +105,16 @@ async function serveHosted(): Promise<void> {
     console.log(`  Host: ${host}`);
     console.log(`  Database: PostgreSQL`);
     console.log(`  CORS: ${corsDomains.join(', ')}`);
-    console.log(`\n  Dashboard: http://${displayHost}:${port}/`);
-    console.log(`  Widget:    http://${displayHost}:${port}/widget.js`);
-    console.log(`  API:       http://${displayHost}:${port}/api/`);
-    console.log(`  Health:    http://${displayHost}:${port}/health`);
+    console.log(`\n  Dashboard: ${baseUrl}/`);
+    console.log(`  Widget:    ${baseUrl}/widget.js`);
+    console.log(`  API:       ${baseUrl}/api/`);
+    console.log(`  Health:    ${baseUrl}/health`);
 
-    // Seed an admin user in hosted mode if none exists
-    const users = await storage.listUsers();
-    if (users.length === 0) {
-      const adminEmail = process.env.ADMIN_EMAIL || 'admin@punchlist.local';
-      const baseUrl = `http://${displayHost}:${port}`;
-      const invite = await auth.createInvite(adminEmail, 'Admin', adminEmail, {
-        role: 'admin',
-        baseUrl,
-      });
-      console.log(`\n  First-run: created admin user (${adminEmail})`);
-      console.log(`  Login:     ${invite.inviteUrl}`);
+    // Show setup URL in hosted mode if no users exist yet
+    const userCount = await storage.countUsers();
+    if (userCount === 0) {
+      console.log(`\n  First-run: No users yet.`);
+      console.log(`  Open the dashboard to complete setup: ${baseUrl}/`);
     }
     console.log('');
   });
@@ -142,12 +135,19 @@ async function serveHosted(): Promise<void> {
  * Local serve mode — boots from punchlist.config.json + .env (original behavior).
  */
 async function serveLocal(): Promise<void> {
-  const { config, storage, auth } = await initAdapters();
+  const { config, storage } = await initAdapters();
 
   if (!config.secrets.githubToken) {
     console.error('\n  Missing PUNCHLIST_GITHUB_TOKEN. Set it in .env or environment.\n');
     process.exit(1);
   }
+
+  if (!config.secrets.authSecret) {
+    console.error('\n  PUNCHLIST_AUTH_SECRET not set. Add it to .env or environment.\n');
+    process.exit(1);
+  }
+
+  const sessionSecret = config.secrets.authSecret;
 
   // Seed default project (GitHub token comes from env, not stored per-project)
   const defaultProjectId = await seedDefaultProject(
@@ -166,7 +166,7 @@ async function serveLocal(): Promise<void> {
     issueAdapter,
     issueAdapterRegistry,
     storageAdapter: storage,
-    authAdapter: auth,
+    sessionSecret,
     config,
     corsDomains: config.widget.corsDomains,
   });
@@ -174,6 +174,7 @@ async function serveLocal(): Promise<void> {
   const port = Number(process.env.PORT) || DEFAULT_PORT;
   const host = process.env.HOST || '127.0.0.1';
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+  const baseUrl = `http://${displayHost}:${port}`;
 
   const server = app.listen(port, host, async () => {
     console.log(`\n  Punchlist QA Server`);
@@ -182,34 +183,41 @@ async function serveLocal(): Promise<void> {
     console.log(`  Port: ${port}`);
     console.log(`  Host: ${host}`);
     console.log(`  CORS: ${config.widget.corsDomains.join(', ')}`);
-    console.log(`\n  Dashboard: http://${displayHost}:${port}/`);
-    console.log(`  Widget:    http://${displayHost}:${port}/widget.js`);
-    console.log(`  API:       http://${displayHost}:${port}/api/`);
+    console.log(`\n  Dashboard: ${baseUrl}/`);
+    console.log(`  Widget:    ${baseUrl}/widget.js`);
+    console.log(`  API:       ${baseUrl}/api/`);
 
     if (process.env.NODE_ENV === 'development') {
       const devEmail = 'dev@punchlist.local';
-      const baseUrl = `http://${displayHost}:${port}`;
       const existing = await storage.getUserByEmail(devEmail);
+
       let token: string;
       if (!existing) {
-        const invite = await auth.createInvite(devEmail, 'Dev Admin', devEmail, {
+        // Create dev admin user using invite utilities directly
+        const newToken = generateToken(sessionSecret, devEmail);
+        const tokenHash = hashToken(newToken);
+        await storage.createUser({
+          email: devEmail,
+          name: 'Dev Admin',
+          tokenHash,
           role: 'admin',
-          baseUrl,
+          invitedBy: devEmail,
         });
-        token = invite.token;
+        token = newToken;
         try {
           await storage.addUserToProject(defaultProjectId, devEmail, 'admin');
         } catch {
           // Ignore if already assigned
         }
-      } else if (existing.revoked) {
-        const invite = await auth.regenerateToken(devEmail, { baseUrl });
-        token = invite.token;
       } else {
-        const invite = await auth.regenerateToken(devEmail, { baseUrl });
-        token = invite.token;
+        // Regenerate token for existing dev user
+        const newToken = generateToken(sessionSecret, devEmail);
+        const tokenHash = hashToken(newToken);
+        await storage.updateUserTokenHash(devEmail, tokenHash);
+        token = newToken;
       }
-      console.log(`\n  Dev Login: http://${displayHost}:${port}/join?token=${encodeURIComponent(token)}`);
+
+      console.log(`\n  Dev Login: ${buildInviteUrl(baseUrl, token)}`);
     }
     console.log('');
   });

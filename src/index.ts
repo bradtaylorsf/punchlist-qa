@@ -23,6 +23,10 @@ export {
   labelDefSchema,
   supportTicketRequestSchema,
   loginRequestSchema,
+  passwordLoginRequestSchema,
+  setupRequestSchema,
+  setPasswordRequestSchema,
+  changePasswordRequestSchema,
 } from './shared/schemas.js';
 export { ConfigFetcher, ConfigFetcherError } from './shared/config-fetcher.js';
 export type { ConfigFetcherOpts } from './shared/config-fetcher.js';
@@ -51,27 +55,24 @@ export type {
   LabelDef,
   SupportTicketRequest,
   LoginRequest,
+  PasswordLoginRequest,
+  SetupRequest,
+  SetPasswordRequest,
+  ChangePasswordRequest,
 } from './shared/types.js';
 export { SqliteAdapter } from './adapters/storage/index.js';
 export type { StorageAdapter } from './adapters/storage/types.js';
 export { GitHubIssueAdapter } from './adapters/issues/index.js';
 export type { IssueAdapter, CreateIssueOpts, CreatedIssue } from './adapters/issues/index.js';
-export { TokenAuthAdapter } from './adapters/auth/index.js';
-export type { TokenAuthAdapterOptions } from './adapters/auth/index.js';
-export type { AuthAdapter, TokenValidation, InviteResult } from './adapters/auth/types.js';
-export {
-  parseCookie,
-  buildSetCookie,
-  buildClearCookie,
-  handleLogin,
-  handleLogout,
-  authenticateRequest,
-} from './adapters/auth/middleware.js';
-export type { SessionCookieOptions } from './adapters/auth/middleware.js';
 export {
   InvalidTokenError,
   UnrecognizedTokenError,
   RevokedUserError,
-} from './adapters/auth/errors.js';
+  InvalidCredentialsError,
+  PasswordNotSetError,
+  SetupAlreadyCompleteError,
+} from './adapters/auth/index.js';
+export { hashPassword, verifyPassword } from './adapters/auth/index.js';
+export { generateToken, validateToken, hashToken, buildInviteUrl } from './server/auth/invite.js';
 export { createApp } from './server/app.js';
 export type { AppDependencies } from './server/app.js';

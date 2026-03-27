@@ -1,5 +1,7 @@
 import { validateEmail } from '../../shared/validation.js';
 import { initAdapters } from '../helpers.js';
+import { generateToken, hashToken, buildInviteUrl } from '../../server/auth/invite.js';
+import { userRoleSchema } from '../../shared/schemas.js';
 
 export interface InviteOptions {
   name: string;
@@ -13,16 +15,32 @@ export async function inviteCommand(email: string, options: InviteOptions): Prom
     process.exit(1);
   }
 
-  const { auth, storage } = await initAdapters();
+  const { config, storage } = await initAdapters();
 
   try {
-    const result = await auth.createInvite(email, options.name, 'cli@punchlist-qa.local', {
-      role: options.role,
-      baseUrl: options.baseUrl,
+    const secret = config.secrets.authSecret;
+    if (!secret) {
+      console.error('\n  PUNCHLIST_AUTH_SECRET not set.\n');
+      process.exit(1);
+    }
+
+    const role = userRoleSchema.parse(options.role ?? 'tester');
+    const token = generateToken(secret, email);
+    const tokenHash = hashToken(token);
+
+    await storage.createUser({
+      email,
+      name: options.name,
+      tokenHash,
+      role,
+      invitedBy: 'cli@punchlist-qa.local',
     });
 
+    const baseUrl = options.baseUrl ?? 'http://localhost:4747';
+    const inviteUrl = buildInviteUrl(baseUrl, token);
+
     console.log(`\n  Invited ${email}`);
-    console.log(`  Invite link: ${result.inviteUrl}\n`);
+    console.log(`  Invite link: ${inviteUrl}\n`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (message.includes('UNIQUE constraint')) {
