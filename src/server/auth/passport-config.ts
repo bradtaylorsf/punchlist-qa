@@ -19,12 +19,12 @@ export function configurePassport(storage: StorageAdapter): void {
             return done(null, false, { message: 'Invalid email or password' });
           }
           if (user.revoked) {
-            return done(null, false, { message: 'User access has been revoked' });
+            return done(null, false, { message: 'Invalid email or password' });
           }
 
           const passwordHash = await storage.getUserPasswordHash(email);
           if (!passwordHash) {
-            return done(null, false, { message: 'Password not set. Use your invite link.' });
+            return done(null, false, { message: 'Invalid email or password' });
           }
 
           const valid = await verifyPassword(password, passwordHash);

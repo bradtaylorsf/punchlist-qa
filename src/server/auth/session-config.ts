@@ -23,7 +23,7 @@ export function createSessionMiddleware(options: SessionConfigOptions): RequestH
   const cookieOptions: session.CookieOptions = {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'lax',
+    sameSite: 'strict',
     maxAge: SEVEN_DAYS_MS,
   };
 
