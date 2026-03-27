@@ -1,9 +1,18 @@
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import {
+  InvalidTokenError,
+  UnrecognizedTokenError,
+  RevokedUserError,
+  InvalidCredentialsError,
+  PasswordNotSetError,
+  SetupAlreadyCompleteError,
+} from '../../adapters/auth/errors.js';
 
 /**
  * Express error handler (4-arg signature).
  * - Zod validation errors → 400 with structured details
+ * - Auth errors → mapped to appropriate HTTP status codes
  * - Generic errors → 500 with sanitized message
  */
 export function errorHandler(
@@ -21,6 +30,21 @@ export function errorHandler(
         message: issue.message,
       })),
     });
+    return;
+  }
+
+  if (err instanceof InvalidTokenError || err instanceof UnrecognizedTokenError || err instanceof InvalidCredentialsError) {
+    res.status(401).json({ success: false, error: (err as Error).message });
+    return;
+  }
+
+  if (err instanceof RevokedUserError || err instanceof PasswordNotSetError) {
+    res.status(403).json({ success: false, error: (err as Error).message });
+    return;
+  }
+
+  if (err instanceof SetupAlreadyCompleteError) {
+    res.status(409).json({ success: false, error: (err as Error).message });
     return;
   }
 

@@ -1,12 +1,11 @@
 import { Pool } from 'pg';
-import { randomUUID, randomBytes, createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { StorageAdapter } from './types.js';
 import { runPgMigrations } from './pg-migrations.js';
 import type {
   Round,
   Result,
   User,
-  Session,
   AccessRequest,
   Project,
   ProjectUser,
@@ -23,7 +22,6 @@ import {
   rowToProjectUser,
   rowToRound,
   rowToResult,
-  rowToSession,
   rowToUser,
   rowToAccessRequest,
 } from './row-converters.js';
@@ -32,7 +30,6 @@ import type {
   ProjectUserRow,
   RoundRow,
   ResultRow,
-  SessionRow,
   UserRow,
   AccessRequestRow,
 } from './row-converters.js';
@@ -366,9 +363,18 @@ export class PostgresAdapter implements StorageAdapter {
     const id = randomUUID();
     const now = new Date().toISOString();
     await pool.query(
-      `INSERT INTO users (id, email, name, token_hash, role, invited_by, revoked, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, FALSE, $7)`,
-      [id, input.email, input.name, input.tokenHash, input.role, input.invitedBy, now],
+      `INSERT INTO users (id, email, name, token_hash, role, invited_by, revoked, created_at, password_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, FALSE, $7, $8)`,
+      [
+        id,
+        input.email,
+        input.name,
+        input.tokenHash,
+        input.role,
+        input.invitedBy,
+        now,
+        input.passwordHash ?? null,
+      ],
     );
     const { rows } = await pool.query<UserRow>('SELECT * FROM users WHERE id = $1', [id]);
     return rowToUser(rows[0]);
@@ -409,6 +415,28 @@ export class PostgresAdapter implements StorageAdapter {
     ]);
   }
 
+  async updateUserPasswordHash(email: string, passwordHash: string): Promise<void> {
+    await this.getPool().query('UPDATE users SET password_hash = $1 WHERE email = $2', [
+      passwordHash,
+      email,
+    ]);
+  }
+
+  async getUserPasswordHash(email: string): Promise<string | null> {
+    const { rows } = await this.getPool().query<{ password_hash: string | null }>(
+      'SELECT password_hash FROM users WHERE email = $1',
+      [email],
+    );
+    return rows[0]?.password_hash ?? null;
+  }
+
+  async countUsers(): Promise<number> {
+    const { rows } = await this.getPool().query<{ count: string }>(
+      'SELECT COUNT(*) as count FROM users',
+    );
+    return parseInt(rows[0]?.count ?? '0', 10);
+  }
+
   // --- Config ---
 
   async getConfig(key: string): Promise<string | null> {
@@ -425,113 +453,6 @@ export class PostgresAdapter implements StorageAdapter {
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
       [key, value],
     );
-  }
-
-  // --- Sessions ---
-
-  async createSession(userEmail: string, expiresAt: string): Promise<Session> {
-    const pool = this.getPool();
-    const rawId = randomBytes(32).toString('hex');
-    // Store a SHA-256 hash of the session ID — if the DB leaks,
-    // an attacker cannot directly impersonate sessions.
-    const id = createHash('sha256').update(rawId).digest('hex');
-    const now = new Date().toISOString();
-    await pool.query(
-      `INSERT INTO sessions (id, user_email, expires_at, created_at)
-       VALUES ($1, $2, $3, $4)`,
-      [id, userEmail, expiresAt, now],
-    );
-    const { rows } = await pool.query<SessionRow>('SELECT * FROM sessions WHERE id = $1', [id]);
-    // Return the raw ID to the caller (for cookie storage); the DB stores the hash.
-    const session = rowToSession(rows[0]);
-    return { ...session, id: rawId };
-  }
-
-  async getSession(id: string): Promise<Session | null> {
-    const hashedId = createHash('sha256').update(id).digest('hex');
-    const { rows } = await this.getPool().query<SessionRow>(
-      'SELECT * FROM sessions WHERE id = $1',
-      [hashedId],
-    );
-    if (!rows[0]) return null;
-    // Return the raw ID the caller provided, not the hash stored in the DB.
-    const session = rowToSession(rows[0]);
-    return { ...session, id };
-  }
-
-  async getSessionWithUser(id: string): Promise<{ session: Session; user: User } | null> {
-    const hashedId = createHash('sha256').update(id).digest('hex');
-    const { rows } = await this.getPool().query<{
-      s_id: string;
-      s_user_email: string;
-      s_expires_at: Date;
-      s_created_at: Date;
-      u_id: string;
-      u_email: string;
-      u_name: string;
-      u_token_hash: string;
-      u_role: string;
-      u_invited_by: string;
-      u_revoked: boolean;
-      u_created_at: Date;
-    }>(
-      `SELECT
-        s.id AS s_id, s.user_email AS s_user_email, s.expires_at AS s_expires_at, s.created_at AS s_created_at,
-        u.id AS u_id, u.email AS u_email, u.name AS u_name, u.token_hash AS u_token_hash,
-        u.role AS u_role, u.invited_by AS u_invited_by, u.revoked AS u_revoked, u.created_at AS u_created_at
-       FROM sessions s
-       JOIN users u ON s.user_email = u.email
-       WHERE s.id = $1`,
-      [hashedId],
-    );
-    if (!rows[0]) return null;
-    const row = rows[0];
-    // Return the raw ID the caller provided, not the hash stored in the DB.
-    const session = rowToSession({
-      id: row.s_id,
-      user_email: row.s_user_email,
-      expires_at: row.s_expires_at,
-      created_at: row.s_created_at,
-    });
-    return {
-      session: { ...session, id },
-      user: rowToUser({
-        id: row.u_id,
-        email: row.u_email,
-        name: row.u_name,
-        token_hash: row.u_token_hash,
-        role: row.u_role,
-        invited_by: row.u_invited_by,
-        revoked: row.u_revoked,
-        created_at: row.u_created_at,
-      }),
-    };
-  }
-
-  async deleteSession(id: string): Promise<void> {
-    const hashedId = createHash('sha256').update(id).digest('hex');
-    await this.getPool().query('DELETE FROM sessions WHERE id = $1', [hashedId]);
-  }
-
-  async deleteExpiredSessions(): Promise<void> {
-    await this.getPool().query('DELETE FROM sessions WHERE expires_at < $1', [
-      new Date().toISOString(),
-    ]);
-  }
-
-  /**
-   * Start a background interval to delete expired sessions.
-   * The interval is unref'd so it won't prevent Node.js from exiting.
-   * Returns a stop function that clears the interval.
-   */
-  startSessionCleanup(intervalMs: number = 60 * 60 * 1000): () => void {
-    const timer = setInterval(() => {
-      this.deleteExpiredSessions().catch((err) => {
-        console.warn('[punchlist] Session cleanup failed:', err);
-      });
-    }, intervalMs);
-    timer.unref();
-    return () => clearInterval(timer);
   }
 
   // --- Access Requests ---
@@ -618,12 +539,4 @@ export class PostgresAdapter implements StorageAdapter {
     return this.pool;
   }
 
-  private requireEncryptionSecret(): string {
-    if (!this.encryptionSecret) {
-      throw new Error(
-        'Encryption secret is required for token operations. Set PUNCHLIST_AUTH_SECRET or pass encryptionSecret to PostgresAdapter.',
-      );
-    }
-    return this.encryptionSecret;
-  }
 }

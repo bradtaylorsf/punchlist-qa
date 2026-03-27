@@ -1,13 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import * as api from '../api/client';
 
 export function LoginPage() {
-  const { login } = useAuth();
-  const [token, setToken] = useState('');
+  const { loginWithPassword } = useAuth();
+  const navigate = useNavigate();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const autoLoginAttempted = useRef(false);
 
   // Access request state
   const [mode, setMode] = useState<'login' | 'request'>('login');
@@ -18,36 +21,15 @@ export function LoginPage() {
   const [requestSuccess, setRequestSuccess] = useState(false);
   const [requestError, setRequestError] = useState('');
 
-  // Auto-login from invite URL query parameter
-  useEffect(() => {
-    if (autoLoginAttempted.current) return;
-    const params = new URLSearchParams(window.location.search);
-    const urlToken = params.get('token');
-    if (!urlToken) return;
-    autoLoginAttempted.current = true;
-    setLoading(true);
-    login(urlToken)
-      .then(() => {
-        // Clear token from URL without reload
-        window.history.replaceState({}, '', '/');
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Login failed');
-        setToken(urlToken);
-      })
-      .finally(() => setLoading(false));
-  }, [login]);
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
-      await login(token);
-      window.history.replaceState({}, '', '/');
+      await loginWithPassword(email, password);
+      navigate('/', { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : 'Invalid email or password');
     } finally {
       setLoading(false);
     }
@@ -71,30 +53,52 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200 w-full max-w-md">
         <h1 className="text-xl font-semibold text-gray-900 mb-6">Punchlist QA</h1>
+
         {mode === 'login' && (
-          <form onSubmit={handleSubmit}>
-            <label htmlFor="token" className="block text-sm font-medium text-gray-700 mb-2">
-              Invite Token
-            </label>
-            <input
-              id="token"
-              type="password"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="Paste your invite token"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={loading}
-            />
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loading}
+                autoComplete="email"
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Your password"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loading}
+                autoComplete="current-password"
+              />
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
             <button
               type="submit"
-              disabled={loading || !token.trim()}
-              className="mt-4 w-full bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading || !email.trim() || !password.trim()}
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
         )}
+
         <div className="mt-6 pt-4 border-t border-gray-200">
           {mode === 'login' ? (
             <button

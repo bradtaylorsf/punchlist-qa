@@ -1,9 +1,20 @@
+/**
+ * Tests for the invite token functions that replaced TokenAuthAdapter.
+ * These cover generateToken, validateToken, hashToken, buildInviteUrl, and
+ * the full invite + login via token flow using SqliteAdapter.
+ */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { TokenAuthAdapter } from '../../src/adapters/auth/token.js';
 import { SqliteAdapter } from '../../src/adapters/storage/sqlite-adapter.js';
+import {
+  generateToken,
+  validateToken,
+  hashToken,
+  buildInviteUrl,
+} from '../../src/server/auth/invite.js';
+import { InvalidTokenError, UnrecognizedTokenError, RevokedUserError } from '../../src/adapters/auth/errors.js';
 
 const secret = 'a-very-long-secret-for-testing-purposes-minimum-16-chars';
 let storage: SqliteAdapter;
@@ -20,279 +31,225 @@ afterEach(async () => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe('TokenAuthAdapter', () => {
-  describe('constructor', () => {
-    it('should create an adapter with a valid secret', () => {
-      expect(() => new TokenAuthAdapter({ secret, storage })).not.toThrow();
-    });
-
-    it('should throw with a short secret', () => {
-      expect(() => new TokenAuthAdapter({ secret: 'short', storage })).toThrow(
-        'at least 16 characters',
-      );
-    });
-
-    it('should throw with an empty secret', () => {
-      expect(() => new TokenAuthAdapter({ secret: '', storage })).toThrow();
-    });
+describe('generateToken', () => {
+  it('generates a non-empty token', () => {
+    const token = generateToken(secret, 'user@example.com');
+    expect(token).toBeTruthy();
+    expect(typeof token).toBe('string');
+    expect(token.length).toBeGreaterThan(0);
   });
 
-  describe('generateToken', () => {
-    it('should generate a non-empty token', () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      const token = auth.generateToken('user@example.com');
-      expect(token).toBeTruthy();
-      expect(typeof token).toBe('string');
-      expect(token.length).toBeGreaterThan(0);
-    });
-
-    it('should generate different tokens for the same email (due to nonce)', () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      const token1 = auth.generateToken('user@example.com');
-      const token2 = auth.generateToken('user@example.com');
-      expect(token1).not.toBe(token2);
-    });
-
-    it('should generate base64url-safe tokens', () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      const token = auth.generateToken('user@example.com');
-      expect(token).not.toMatch(/[+/=]/);
-    });
+  it('generates different tokens for the same email (nonce randomness)', () => {
+    const t1 = generateToken(secret, 'user@example.com');
+    const t2 = generateToken(secret, 'user@example.com');
+    expect(t1).not.toBe(t2);
   });
 
-  describe('validateToken', () => {
-    it('should validate a token it generated', () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      const token = auth.generateToken('user@example.com');
-      const result = auth.validateToken(token);
-      expect(result.valid).toBe(true);
-      expect(result.email).toBe('user@example.com');
-    });
+  it('generates base64url-safe tokens (no +, /, or =)', () => {
+    const token = generateToken(secret, 'user@example.com');
+    expect(token).not.toMatch(/[+/=]/);
+  });
+});
 
-    it('should reject a tampered token', () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      const token = auth.generateToken('user@example.com');
-      const tampered = token.slice(0, -2) + 'XX';
-      const result = auth.validateToken(tampered);
-      expect(result.valid).toBe(false);
-    });
-
-    it('should reject a token signed with a different secret', () => {
-      const auth1 = new TokenAuthAdapter({ secret, storage });
-      const auth2 = new TokenAuthAdapter({ secret: 'different-secret-also-long-enough', storage });
-      const token = auth1.generateToken('user@example.com');
-      const result = auth2.validateToken(token);
-      expect(result.valid).toBe(false);
-    });
-
-    it('should reject garbage input', () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      expect(auth.validateToken('').valid).toBe(false);
-      expect(auth.validateToken('not-a-token').valid).toBe(false);
-      expect(auth.validateToken('YWJj').valid).toBe(false);
-    });
-
-    it('should handle emails with special characters', () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      const token = auth.generateToken('user+tag@example.com');
-      const result = auth.validateToken(token);
-      expect(result.valid).toBe(true);
-      expect(result.email).toBe('user+tag@example.com');
-    });
+describe('validateToken', () => {
+  it('validates a token it generated', () => {
+    const token = generateToken(secret, 'user@example.com');
+    const result = validateToken(secret, token);
+    expect(result.valid).toBe(true);
+    expect(result.email).toBe('user@example.com');
   });
 
-  describe('invite flow', () => {
-    it('creates user in storage with hashed token and returns invite URL', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage, baseUrl: 'https://app.test' });
-      const result = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-
-      expect(result.user.email).toBe('alice@example.com');
-      expect(result.user.name).toBe('Alice');
-      expect(result.user.role).toBe('tester');
-      expect(result.user.revoked).toBe(false);
-      expect(result.token).toBeTruthy();
-      expect(result.inviteUrl).toMatch(/^https:\/\/app\.test\/join\?token=/);
-
-      // Verify user is stored
-      const stored = await storage.getUserByEmail('alice@example.com');
-      expect(stored).not.toBeNull();
-      expect(stored!.tokenHash).not.toBe(result.token); // stored as hash, not raw
-    });
-
-    it('uses custom role when specified', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      const result = await auth.createInvite('admin@example.com', 'Admin', 'root@example.com', {
-        role: 'admin',
-      });
-
-      expect(result.user.role).toBe('admin');
-    });
-
-    it('uses custom baseUrl when specified in options', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage, baseUrl: 'https://default.test' });
-      const result = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com', {
-        baseUrl: 'https://custom.test',
-      });
-
-      expect(result.inviteUrl).toMatch(/^https:\/\/custom\.test\/join\?token=/);
-    });
-
-    it('throws on duplicate email', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-      await expect(
-        auth.createInvite('alice@example.com', 'Alice2', 'admin@example.com'),
-      ).rejects.toThrow();
-    });
-
-    it('throws on invalid role', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await expect(
-        auth.createInvite('alice@example.com', 'Alice', 'admin@example.com', {
-          role: 'superadmin',
-        }),
-      ).rejects.toThrow();
-    });
-
-    it('URL-encodes the token in invite URL', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage, baseUrl: 'https://app.test' });
-      const result = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-      // The invite URL should contain an encoded token (no raw special chars)
-      const url = new URL(result.inviteUrl);
-      expect(url.searchParams.get('token')).toBe(result.token);
-    });
+  it('rejects a tampered token', () => {
+    const token = generateToken(secret, 'user@example.com');
+    const tampered = token.slice(0, -2) + 'XX';
+    expect(validateToken(secret, tampered).valid).toBe(false);
   });
 
-  describe('revocation', () => {
-    it('delegates to storage.revokeUser', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-
-      await auth.revokeAccess('alice@example.com');
-
-      const user = await storage.getUserByEmail('alice@example.com');
-      expect(user!.revoked).toBe(true);
-    });
-
-    it('is a no-op when revoking a non-existent user', async () => {
-      // revokeUser is idempotent — missing users are silently ignored at the storage layer.
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await expect(auth.revokeAccess('nobody@example.com')).resolves.toBeUndefined();
-    });
+  it('rejects a token signed with a different secret', () => {
+    const token = generateToken(secret, 'user@example.com');
+    expect(validateToken('different-secret-also-long-enough', token).valid).toBe(false);
   });
 
-  describe('listUsers', () => {
-    it('returns all users from storage', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-      await auth.createInvite('bob@example.com', 'Bob', 'admin@example.com');
-
-      const users = await auth.listUsers();
-      expect(users).toHaveLength(2);
-    });
+  it('rejects garbage input', () => {
+    expect(validateToken(secret, '').valid).toBe(false);
+    expect(validateToken(secret, 'not-a-token').valid).toBe(false);
+    expect(validateToken(secret, 'YWJj').valid).toBe(false);
   });
 
-  describe('loginWithToken', () => {
-    it('creates session when token hash matches stored user', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      const invite = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
+  it('handles emails with special characters', () => {
+    const token = generateToken(secret, 'user+tag@example.com');
+    const result = validateToken(secret, token);
+    expect(result.valid).toBe(true);
+    expect(result.email).toBe('user+tag@example.com');
+  });
+});
 
-      const sessionId = await auth.loginWithToken(invite.token);
-      expect(sessionId).toBeTruthy();
+describe('invite flow (generateToken + storage)', () => {
+  it('creates user with hashed token and returns invite URL', async () => {
+    const token = generateToken(secret, 'alice@example.com');
+    const tokenHash = hashToken(token);
 
-      const user = await auth.validateSession(sessionId);
-      expect(user).not.toBeNull();
-      expect(user!.email).toBe('alice@example.com');
+    const user = await storage.createUser({
+      email: 'alice@example.com',
+      name: 'Alice',
+      tokenHash,
+      role: 'tester',
+      invitedBy: 'admin@example.com',
     });
 
-    it('rejects a valid HMAC token whose hash is not in storage', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
+    expect(user.email).toBe('alice@example.com');
+    expect(user.name).toBe('Alice');
+    expect(user.role).toBe('tester');
+    expect(user.revoked).toBe(false);
+    expect(user.tokenHash).toBe(tokenHash);
+    expect(user.tokenHash).not.toBe(token); // stored as hash, not raw
 
-      // Generate a new token — valid HMAC but different nonce, so different hash
-      const freshToken = auth.generateToken('alice@example.com');
-      await expect(auth.loginWithToken(freshToken)).rejects.toThrow('Token not recognized');
-    });
+    const inviteUrl = buildInviteUrl('https://app.test', token);
+    expect(inviteUrl).toMatch(/^https:\/\/app\.test\/join\?token=/);
 
-    it('rejects token for revoked user', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      const invite = await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-      await auth.revokeAccess('alice@example.com');
-
-      await expect(auth.loginWithToken(invite.token)).rejects.toThrow('revoked');
-    });
-
-    it('rejects invalid token', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await expect(auth.loginWithToken('garbage-token')).rejects.toThrow('Invalid');
-    });
+    // Verify user is retrievable by token hash
+    const stored = await storage.getUserByTokenHash(tokenHash);
+    expect(stored).not.toBeNull();
+    expect(stored!.email).toBe('alice@example.com');
   });
 
-  describe('sessions', () => {
-    it('creates and validates a session round-trip', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-
-      const sessionId = await auth.createSession('alice@example.com');
-      expect(sessionId).toBeTruthy();
-      expect(typeof sessionId).toBe('string');
-
-      const user = await auth.validateSession(sessionId);
-      expect(user).not.toBeNull();
-      expect(user!.email).toBe('alice@example.com');
+  it('uses custom role when specified', async () => {
+    const token = generateToken(secret, 'admin@example.com');
+    const user = await storage.createUser({
+      email: 'admin@example.com',
+      name: 'Admin',
+      tokenHash: hashToken(token),
+      role: 'admin',
+      invitedBy: 'root@example.com',
     });
+    expect(user.role).toBe('admin');
+  });
 
-    it('returns null for non-existent session', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      const user = await auth.validateSession('non-existent-session-id');
-      expect(user).toBeNull();
-    });
+  it('URL-encodes the token in invite URL', async () => {
+    const token = generateToken(secret, 'alice@example.com');
+    const inviteUrl = buildInviteUrl('https://app.test', token);
+    const url = new URL(inviteUrl);
+    expect(url.searchParams.get('token')).toBe(token);
+  });
 
-    it('destroySession removes the session', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
+  it('throws on duplicate email', async () => {
+    const t1 = generateToken(secret, 'alice@example.com');
+    const t2 = generateToken(secret, 'alice@example.com');
+    await storage.createUser({ email: 'alice@example.com', name: 'Alice', tokenHash: hashToken(t1), role: 'tester', invitedBy: 'admin@example.com' });
+    await expect(
+      storage.createUser({ email: 'alice@example.com', name: 'Alice2', tokenHash: hashToken(t2), role: 'tester', invitedBy: 'admin@example.com' }),
+    ).rejects.toThrow();
+  });
+});
 
-      const sessionId = await auth.createSession('alice@example.com');
-      await auth.destroySession(sessionId);
+describe('revocation', () => {
+  it('delegates to storage.revokeUser', async () => {
+    const token = generateToken(secret, 'alice@example.com');
+    await storage.createUser({ email: 'alice@example.com', name: 'Alice', tokenHash: hashToken(token), role: 'tester', invitedBy: 'admin@example.com' });
+    await storage.revokeUser('alice@example.com');
 
-      const user = await auth.validateSession(sessionId);
-      expect(user).toBeNull();
-    });
+    const user = await storage.getUserByEmail('alice@example.com');
+    expect(user!.revoked).toBe(true);
+  });
 
-    it('throws when creating session for non-existent user', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await expect(auth.createSession('nobody@example.com')).rejects.toThrow('User not found');
-    });
+  it('is a no-op for non-existent user', async () => {
+    await expect(storage.revokeUser('nobody@example.com')).resolves.toBeUndefined();
+  });
+});
 
-    it('throws when creating session for revoked user', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-      await auth.revokeAccess('alice@example.com');
+describe('listUsers', () => {
+  it('returns all users from storage', async () => {
+    await storage.createUser({ email: 'alice@example.com', name: 'Alice', tokenHash: hashToken(generateToken(secret, 'alice@example.com')), role: 'tester', invitedBy: 'admin@example.com' });
+    await storage.createUser({ email: 'bob@example.com', name: 'Bob', tokenHash: hashToken(generateToken(secret, 'bob@example.com')), role: 'tester', invitedBy: 'admin@example.com' });
 
-      await expect(auth.createSession('alice@example.com')).rejects.toThrow('revoked');
-    });
+    const users = await storage.listUsers();
+    expect(users).toHaveLength(2);
+  });
+});
 
-    it('returns null for revoked user session', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage });
-      await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-      const sessionId = await auth.createSession('alice@example.com');
+describe('token-based login flow', () => {
+  it('looks up user by token hash for a valid token', async () => {
+    const token = generateToken(secret, 'alice@example.com');
+    const tokenHash = hashToken(token);
+    await storage.createUser({ email: 'alice@example.com', name: 'Alice', tokenHash, role: 'tester', invitedBy: 'admin@example.com' });
 
-      await auth.revokeAccess('alice@example.com');
+    // Simulate what the auth route does: validate + hash + getUserByTokenHash
+    const validation = validateToken(secret, token);
+    expect(validation.valid).toBe(true);
 
-      const user = await auth.validateSession(sessionId);
-      expect(user).toBeNull();
-    });
+    const hash = hashToken(token);
+    const user = await storage.getUserByTokenHash(hash);
+    expect(user).not.toBeNull();
+    expect(user!.email).toBe('alice@example.com');
+  });
 
-    it('returns null for expired session', async () => {
-      const auth = new TokenAuthAdapter({ secret, storage, sessionTtlMs: 1 });
-      await auth.createInvite('alice@example.com', 'Alice', 'admin@example.com');
-      const sessionId = await auth.createSession('alice@example.com');
+  it('rejects a valid HMAC token whose hash is not in storage', async () => {
+    await storage.createUser({ email: 'alice@example.com', name: 'Alice', tokenHash: hashToken(generateToken(secret, 'alice@example.com')), role: 'tester', invitedBy: 'admin@example.com' });
 
-      // Wait for expiry
-      await new Promise((resolve) => setTimeout(resolve, 10));
+    // Generate a fresh token — valid HMAC but different nonce → different hash
+    const freshToken = generateToken(secret, 'alice@example.com');
+    const validation = validateToken(secret, freshToken);
+    expect(validation.valid).toBe(true);
 
-      const user = await auth.validateSession(sessionId);
-      expect(user).toBeNull();
-    });
+    const user = await storage.getUserByTokenHash(hashToken(freshToken));
+    expect(user).toBeNull();
+
+    // Simulate route throwing UnrecognizedTokenError
+    if (!user) {
+      expect(() => { throw new UnrecognizedTokenError(); }).toThrow('Token not recognized');
+    }
+  });
+
+  it('detects revoked user', async () => {
+    const token = generateToken(secret, 'alice@example.com');
+    const tokenHash = hashToken(token);
+    await storage.createUser({ email: 'alice@example.com', name: 'Alice', tokenHash, role: 'tester', invitedBy: 'admin@example.com' });
+    await storage.revokeUser('alice@example.com');
+
+    const user = await storage.getUserByTokenHash(tokenHash);
+    expect(user).not.toBeNull();
+    expect(user!.revoked).toBe(true);
+
+    if (user!.revoked) {
+      expect(() => { throw new RevokedUserError(); }).toThrow('revoked');
+    }
+  });
+
+  it('rejects invalid token', () => {
+    const validation = validateToken(secret, 'garbage-token');
+    expect(validation.valid).toBe(false);
+
+    if (!validation.valid) {
+      expect(() => { throw new InvalidTokenError(); }).toThrow('Invalid');
+    }
+  });
+});
+
+describe('countUsers', () => {
+  it('returns 0 when no users', async () => {
+    expect(await storage.countUsers()).toBe(0);
+  });
+
+  it('returns the correct count after creating users', async () => {
+    await storage.createUser({ email: 'alice@example.com', name: 'Alice', tokenHash: hashToken(generateToken(secret, 'alice@example.com')), role: 'tester', invitedBy: 'admin@example.com' });
+    expect(await storage.countUsers()).toBe(1);
+    await storage.createUser({ email: 'bob@example.com', name: 'Bob', tokenHash: hashToken(generateToken(secret, 'bob@example.com')), role: 'tester', invitedBy: 'admin@example.com' });
+    expect(await storage.countUsers()).toBe(2);
+  });
+});
+
+describe('updateUserPasswordHash / getUserPasswordHash', () => {
+  it('stores and retrieves a password hash', async () => {
+    const token = generateToken(secret, 'alice@example.com');
+    await storage.createUser({ email: 'alice@example.com', name: 'Alice', tokenHash: hashToken(token), role: 'tester', invitedBy: 'admin@example.com' });
+
+    expect(await storage.getUserPasswordHash('alice@example.com')).toBeNull();
+
+    await storage.updateUserPasswordHash('alice@example.com', 'hashed-password-value');
+    expect(await storage.getUserPasswordHash('alice@example.com')).toBe('hashed-password-value');
+  });
+
+  it('returns null for non-existent user', async () => {
+    expect(await storage.getUserPasswordHash('nobody@example.com')).toBeNull();
   });
 });

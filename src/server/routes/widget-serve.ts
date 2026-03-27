@@ -4,8 +4,12 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
-// Default: resolve dist/ relative to the package root (compiled module at dist/server/routes/)
-const DEFAULT_DIST_DIR = join(MODULE_DIR, '..', '..');
+// Resolve dist/ relative to the package root.
+// When compiled: module is at dist/server/routes/ → go up 2 levels to dist/
+// When running via tsx from source: module is at src/server/routes/ → use cwd()/dist/
+const DEFAULT_DIST_DIR = MODULE_DIR.includes('/src/')
+  ? join(process.cwd(), 'dist')
+  : join(MODULE_DIR, '..', '..');
 
 /**
  * Serves the bundled widget JS file.

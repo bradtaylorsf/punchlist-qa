@@ -34,3 +34,39 @@ export class RevokedUserError extends Error {
     Error.captureStackTrace?.(this, RevokedUserError);
   }
 }
+
+/**
+ * Thrown when email/password credentials are invalid.
+ * Maps to HTTP 401.
+ */
+export class InvalidCredentialsError extends Error {
+  constructor(message = 'Invalid email or password') {
+    super(message);
+    this.name = 'InvalidCredentialsError';
+    Error.captureStackTrace?.(this, InvalidCredentialsError);
+  }
+}
+
+/**
+ * Thrown when a user has no password set (invite-only account that hasn't set a password).
+ * Maps to HTTP 403.
+ */
+export class PasswordNotSetError extends Error {
+  constructor(message = 'Password not set. Use your invite link to set a password.') {
+    super(message);
+    this.name = 'PasswordNotSetError';
+    Error.captureStackTrace?.(this, PasswordNotSetError);
+  }
+}
+
+/**
+ * Thrown when attempting first-run setup but users already exist.
+ * Maps to HTTP 409.
+ */
+export class SetupAlreadyCompleteError extends Error {
+  constructor(message = 'Setup has already been completed') {
+    super(message);
+    this.name = 'SetupAlreadyCompleteError';
+    Error.captureStackTrace?.(this, SetupAlreadyCompleteError);
+  }
+}

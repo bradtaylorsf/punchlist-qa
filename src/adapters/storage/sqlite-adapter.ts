@@ -1,14 +1,13 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { randomUUID, randomBytes, createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { StorageAdapter } from './types.js';
 import { runMigrations } from './migrations.js';
 import type {
   Round,
   Result,
   User,
-  Session,
   AccessRequest,
   Project,
   ProjectUser,
@@ -25,7 +24,6 @@ import {
   rowToProjectUser,
   rowToRound,
   rowToResult,
-  rowToSession,
   rowToUser,
   rowToAccessRequest,
 } from './row-converters.js';
@@ -34,7 +32,6 @@ import type {
   ProjectUserRow,
   RoundRow,
   ResultRow,
-  SessionRow,
   UserRow,
   AccessRequestRow,
 } from './row-converters.js';
@@ -352,9 +349,18 @@ export class SqliteAdapter implements StorageAdapter {
     const id = randomUUID();
     const now = new Date().toISOString();
     db.prepare(
-      `INSERT INTO users (id, email, name, token_hash, role, invited_by, revoked, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
-    ).run(id, input.email, input.name, input.tokenHash, input.role, input.invitedBy, now);
+      `INSERT INTO users (id, email, name, token_hash, role, invited_by, revoked, created_at, password_hash)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+    ).run(
+      id,
+      input.email,
+      input.name,
+      input.tokenHash,
+      input.role,
+      input.invitedBy,
+      now,
+      input.passwordHash ?? null,
+    );
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow;
     return rowToUser(row);
   }
@@ -389,6 +395,26 @@ export class SqliteAdapter implements StorageAdapter {
     this.getDb().prepare('UPDATE users SET token_hash = ? WHERE email = ?').run(newTokenHash, email);
   }
 
+  async updateUserPasswordHash(email: string, passwordHash: string): Promise<void> {
+    this.getDb()
+      .prepare('UPDATE users SET password_hash = ? WHERE email = ?')
+      .run(passwordHash, email);
+  }
+
+  async getUserPasswordHash(email: string): Promise<string | null> {
+    const row = this.getDb()
+      .prepare('SELECT password_hash FROM users WHERE email = ?')
+      .get(email) as { password_hash: string | null } | undefined;
+    return row?.password_hash ?? null;
+  }
+
+  async countUsers(): Promise<number> {
+    const row = this.getDb().prepare('SELECT COUNT(*) as count FROM users').get() as {
+      count: number;
+    };
+    return row.count;
+  }
+
   // --- Config ---
 
   async getConfig(key: string): Promise<string | null> {
@@ -402,111 +428,6 @@ export class SqliteAdapter implements StorageAdapter {
     this.getDb()
       .prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)')
       .run(key, value);
-  }
-
-  // --- Sessions ---
-
-  async createSession(userEmail: string, expiresAt: string): Promise<Session> {
-    const db = this.getDb();
-    const rawId = randomBytes(32).toString('hex');
-    // Store a SHA-256 hash of the session ID — if the DB file leaks,
-    // an attacker cannot directly impersonate sessions.
-    const id = createHash('sha256').update(rawId).digest('hex');
-    const now = new Date().toISOString();
-    db.prepare(
-      `INSERT INTO sessions (id, user_email, expires_at, created_at)
-       VALUES (?, ?, ?, ?)`,
-    ).run(id, userEmail, expiresAt, now);
-    const row = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow;
-    // Return the raw ID to the caller (for cookie storage); the DB stores the hash.
-    const session = rowToSession(row);
-    return { ...session, id: rawId };
-  }
-
-  async getSession(id: string): Promise<Session | null> {
-    const hashedId = createHash('sha256').update(id).digest('hex');
-    const row = this.getDb().prepare('SELECT * FROM sessions WHERE id = ?').get(hashedId) as
-      | SessionRow
-      | undefined;
-    if (!row) return null;
-    // Return the raw ID the caller provided, not the hash stored in the DB.
-    const session = rowToSession(row);
-    return { ...session, id };
-  }
-
-  async getSessionWithUser(id: string): Promise<{ session: Session; user: User } | null> {
-    const hashedId = createHash('sha256').update(id).digest('hex');
-    const row = this.getDb()
-      .prepare(
-        `SELECT
-        s.id AS s_id, s.user_email AS s_user_email, s.expires_at AS s_expires_at, s.created_at AS s_created_at,
-        u.id AS u_id, u.email AS u_email, u.name AS u_name, u.token_hash AS u_token_hash,
-        u.role AS u_role, u.invited_by AS u_invited_by, u.revoked AS u_revoked, u.created_at AS u_created_at
-       FROM sessions s
-       JOIN users u ON s.user_email = u.email
-       WHERE s.id = ?`,
-      )
-      .get(hashedId) as
-      | {
-          s_id: string;
-          s_user_email: string;
-          s_expires_at: string;
-          s_created_at: string;
-          u_id: string;
-          u_email: string;
-          u_name: string;
-          u_token_hash: string;
-          u_role: string;
-          u_invited_by: string;
-          u_revoked: number;
-          u_created_at: string;
-        }
-      | undefined;
-    if (!row) return null;
-    // Return the raw ID the caller provided, not the hash stored in the DB.
-    const session = rowToSession({
-      id: row.s_id,
-      user_email: row.s_user_email,
-      expires_at: row.s_expires_at,
-      created_at: row.s_created_at,
-    });
-    return {
-      session: { ...session, id },
-      user: rowToUser({
-        id: row.u_id,
-        email: row.u_email,
-        name: row.u_name,
-        token_hash: row.u_token_hash,
-        role: row.u_role,
-        invited_by: row.u_invited_by,
-        revoked: row.u_revoked,
-        created_at: row.u_created_at,
-      }),
-    };
-  }
-
-  async deleteSession(id: string): Promise<void> {
-    const hashedId = createHash('sha256').update(id).digest('hex');
-    this.getDb().prepare('DELETE FROM sessions WHERE id = ?').run(hashedId);
-  }
-
-  async deleteExpiredSessions(): Promise<void> {
-    this.getDb().prepare('DELETE FROM sessions WHERE expires_at < ?').run(new Date().toISOString());
-  }
-
-  /**
-   * Start a background interval to delete expired sessions.
-   * The interval is unref'd so it won't prevent Node.js from exiting.
-   * Returns a stop function that clears the interval.
-   */
-  startSessionCleanup(intervalMs: number = 60 * 60 * 1000): () => void {
-    const timer = setInterval(() => {
-      this.deleteExpiredSessions().catch((err) => {
-        console.warn('[punchlist] Session cleanup failed:', err);
-      });
-    }, intervalMs);
-    timer.unref();
-    return () => clearInterval(timer);
   }
 
   // --- Access Requests ---
@@ -569,12 +490,4 @@ export class SqliteAdapter implements StorageAdapter {
     return this.db;
   }
 
-  private requireEncryptionSecret(): string {
-    if (!this.encryptionSecret) {
-      throw new Error(
-        'Encryption secret is required for token operations. Set PUNCHLIST_AUTH_SECRET or pass encryptionSecret to SqliteAdapter.',
-      );
-    }
-    return this.encryptionSecret;
-  }
 }

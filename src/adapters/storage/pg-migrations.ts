@@ -111,6 +111,13 @@ export const pgMigrations: PgMigration[] = [
       CREATE INDEX IF NOT EXISTS idx_access_requests_project_id ON access_requests(project_id);
     `,
   },
+  {
+    version: 2,
+    description: 'Add password_hash column to users table',
+    up: `
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+    `,
+  },
 ];
 
 export async function runPgMigrations(pool: Pool): Promise<void> {

@@ -1,33 +1,37 @@
-import type { Request, Response, NextFunction } from 'express';
-import type { AuthAdapter } from '../../adapters/auth/types.js';
+import type { RequestHandler } from 'express';
 import type { User } from '../../shared/types.js';
-import { authenticateRequest } from '../../adapters/auth/middleware.js';
 
+// Tell Passport (and all of Express) that req.user is our User type.
+// Passport stores the deserialized user as req.user typed as Express.User.
+// By merging our User fields into Express.User, we get full type safety
+// everywhere req.user is accessed — without fighting Passport's global types.
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
-    interface Request {
-      user?: User;
+    interface User {
+      id: string;
+      email: string;
+      name: string;
+      tokenHash: string;
+      role: string;
+      invitedBy: string;
+      revoked: boolean;
+      createdAt: string;
     }
   }
 }
 
+// Re-export User so callers can use it from this module if needed
+export type { User };
+
 /**
- * Express middleware that validates the session cookie and sets req.user.
- * Returns 401 if no valid session is found.
+ * Express middleware that checks for an authenticated Passport session.
+ * Returns 401 if the request is not authenticated.
  */
-export function requireAuth(authAdapter: AuthAdapter) {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const user = await authenticateRequest(authAdapter, req.headers.cookie);
-      if (!user) {
-        res.status(401).json({ success: false, error: 'Authentication required' });
-        return;
-      }
-      req.user = user;
-      next();
-    } catch {
-      res.status(401).json({ success: false, error: 'Authentication required' });
-    }
-  };
-}
+export const requireAuth: RequestHandler = (req, res, next) => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return;
+  }
+  next();
+};

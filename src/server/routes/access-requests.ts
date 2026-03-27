@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import type { StorageAdapter } from '../../adapters/storage/types.js';
-import type { AuthAdapter } from '../../adapters/auth/types.js';
-import { createAccessRequestInputSchema, accessRequestStatusSchema } from '../../shared/schemas.js';
+import { createAccessRequestInputSchema, accessRequestStatusSchema, userRoleSchema } from '../../shared/schemas.js';
 import { requireAdmin } from '../middleware/require-admin.js';
+import { generateToken, hashToken, buildInviteUrl } from '../auth/invite.js';
 
 /**
  * Public router: POST / to submit an access request (no auth required).
@@ -58,7 +58,7 @@ export function publicAccessRequestRouter(storageAdapter: StorageAdapter): Route
  */
 export function adminAccessRequestRouter(
   storageAdapter: StorageAdapter,
-  authAdapter: AuthAdapter,
+  sessionSecret: string,
 ): Router {
   const router = Router();
 
@@ -89,7 +89,22 @@ export function adminAccessRequestRouter(
       }
 
       // Create the user invite
-      const inviteResult = await authAdapter.createInvite(request.email, request.name, req.user!.email);
+      const token = generateToken(sessionSecret, request.email);
+      const tokenHash = hashToken(token);
+      const role = userRoleSchema.parse('tester');
+
+      const user = await storageAdapter.createUser({
+        email: request.email,
+        name: request.name,
+        tokenHash,
+        role,
+        invitedBy: req.user!.email,
+      });
+
+      const baseUrl =
+        req.headers.origin ??
+        `${req.protocol}://${req.get('host') ?? 'localhost:4747'}`;
+      const inviteUrl = buildInviteUrl(String(baseUrl), token);
 
       // Mark request as approved
       const updated = await storageAdapter.updateAccessRequestStatus(
@@ -98,13 +113,13 @@ export function adminAccessRequestRouter(
         req.user!.email,
       );
 
-      const { tokenHash: _hash, ...safeUser } = inviteResult.user;
+      const { tokenHash: _hash, ...safeUser } = user;
       res.json({
         success: true,
         data: {
           request: updated,
           user: safeUser,
-          inviteUrl: inviteResult.inviteUrl,
+          inviteUrl,
         },
       });
     } catch (err) {
