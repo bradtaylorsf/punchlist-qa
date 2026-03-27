@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import * as api from '../api/client';
 
 export interface Project {
@@ -63,7 +63,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
 export function WorkspaceProjectProvider({ children }: { children: ReactNode }) {
   const { projectId } = useParams<{ projectId: string }>();
-  const { projects } = useProject();
+  const { projects, loading } = useProject();
 
   const project = projects.find((p) => p.id === projectId) ?? null;
 
@@ -77,10 +77,22 @@ export function WorkspaceProjectProvider({ children }: { children: ReactNode }) 
     };
   }, [project?.id]);
 
-  if (!project) {
+  // Wait for the project list to load before deciding "not found"
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-2">
         <p className="text-gray-500">Project not found.</p>
+        <Link to="/" className="text-sm text-blue-600 hover:underline">
+          Back to Projects
+        </Link>
       </div>
     );
   }

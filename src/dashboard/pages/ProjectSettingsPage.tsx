@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useWorkspaceProject } from '../hooks/useProject';
-import { useProject } from '../hooks/useProject';
+import { useWorkspaceProject, useProject } from '../hooks/useProject';
+import { useAuth } from '../hooks/useAuth';
 import { ProjectMembersSection } from '../components/ProjectMembersSection';
 import * as api from '../api/client';
 import type { SyncResultData } from '../api/client';
@@ -80,8 +80,17 @@ function SyncDiffSummary({ data }: { data: SyncResultData }) {
 }
 
 export function ProjectSettingsPage() {
+  const { user } = useAuth();
   const { currentProject } = useWorkspaceProject();
   const { refreshProjects } = useProject();
+
+  if (user?.role !== 'admin') {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-500">Admin access required to manage project settings.</p>
+      </div>
+    );
+  }
   const navigate = useNavigate();
 
   const [members, setMembers] = useState<ProjectUser[]>([]);
@@ -246,7 +255,12 @@ export function ProjectSettingsPage() {
 
       {/* Sync Preview Modal */}
       {showSyncModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onKeyDown={(e) => { if (e.key === 'Escape' && !applying) { setShowSyncModal(false); setSyncPreview(null); } }}
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
             <h3 className="text-lg font-medium text-gray-900 mb-1">Sync Config</h3>
             <p className="text-xs text-gray-500 mb-4">{currentProject.repoSlug}</p>
@@ -283,7 +297,12 @@ export function ProjectSettingsPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onKeyDown={(e) => { if (e.key === 'Escape' && !deleting) setShowDeleteConfirm(false); }}
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
             <h3 className="text-lg font-medium text-gray-900 mb-2">Delete Project</h3>
             <p className="text-sm text-gray-600 mb-6">
