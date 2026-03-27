@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as api from '../api/client';
-import { useProject } from './useProject';
+import { useWorkspaceProject } from './useProject';
 
 export interface Round {
   id: string;
@@ -30,7 +30,7 @@ export interface TestResult {
 }
 
 export function useTestingState() {
-  const { currentProject } = useProject();
+  const { currentProject } = useWorkspaceProject();
   const [rounds, setRounds] = useState<Round[]>([]);
   const [activeRound, setActiveRound] = useState<Round | null>(null);
   const [results, setResults] = useState<Map<string, TestResult>>(new Map());
@@ -54,7 +54,7 @@ export function useTestingState() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [currentProject?.id]);
+  }, [currentProject.id]);
 
   // Load results when active round changes
   useEffect(() => {

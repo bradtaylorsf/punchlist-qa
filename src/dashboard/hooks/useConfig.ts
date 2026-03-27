@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import * as api from '../api/client';
-import { useProject } from './useProject';
+import { useWorkspaceProject } from './useProject';
 
 interface ConfigData {
   projectName: string;
@@ -16,7 +16,7 @@ interface ConfigData {
 }
 
 export function useConfig() {
-  const { currentProject } = useProject();
+  const { currentProject } = useWorkspaceProject();
   const [config, setConfig] = useState<ConfigData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +31,7 @@ export function useConfig() {
       .then((res) => setConfig(res.data))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [currentProject?.id]);
+  }, [currentProject.id]);
 
   return { config, loading, error };
 }
