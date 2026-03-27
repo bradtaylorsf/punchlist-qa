@@ -147,7 +147,7 @@ export const userSchema = z.object({
   name: z.string(),
   tokenHash: z.string(),
   role: userRoleSchema,
-  invitedBy: z.string().email(),
+  invitedBy: z.string().min(1),
   revoked: z.boolean(),
   createdAt: z.string(),
 });
