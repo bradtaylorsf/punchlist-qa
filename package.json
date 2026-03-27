@@ -1,6 +1,6 @@
 {
   "name": "punchlist-qa",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Standalone QA testing dashboard and support widget toolkit for any project",
   "license": "MIT",
   "author": "Brad Taylor <brad@bradtaylorsf.com>",
@@ -33,6 +33,7 @@
     "punchlist.config.example.json"
   ],
   "scripts": {
+    "prepublishOnly": "pnpm build && pnpm test && pnpm type-check",
     "build": "tsc && node scripts/build-widget.mjs && vite build --config src/dashboard/vite.config.ts",
     "build:widget": "node scripts/build-widget.mjs",
     "build:dashboard": "vite build --config src/dashboard/vite.config.ts",

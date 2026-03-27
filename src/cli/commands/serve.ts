@@ -1,16 +1,23 @@
+import { randomBytes } from 'node:crypto';
 import { DEFAULT_PORT } from '../../shared/constants.js';
 import { GitHubIssueAdapter } from '../../adapters/issues/index.js';
 import { IssueAdapterRegistry } from '../../adapters/issues/registry.js';
+import { createStorageAdapter } from '../../adapters/storage/factory.js';
+import { TokenAuthAdapter } from '../../adapters/auth/token.js';
 import { createApp } from '../../server/app.js';
 import { initAdapters } from '../helpers.js';
+import type { StorageAdapter } from '../../adapters/storage/types.js';
+
+export interface ServeOptions {
+  hosted?: boolean;
+}
 
 /**
  * Seed or retrieve the default project from the database.
  * On first run, creates a project from the config file and assigns all existing users.
- * Also backfills null project_id values in rounds, results, and access_requests.
  */
 async function seedDefaultProject(
-  storage: Awaited<ReturnType<typeof initAdapters>>['storage'],
+  storage: StorageAdapter,
   repoSlug: string,
   projectName: string,
 ): Promise<string> {
@@ -23,13 +30,12 @@ async function seedDefaultProject(
     });
     console.log(`  Created default project: ${project.name} (${project.repoSlug})`);
 
-    // Assign all existing users to the default project
     const users = await storage.listUsers();
     for (const user of users) {
       try {
         await storage.addUserToProject(project.id, user.email, user.role);
       } catch {
-        // Ignore if user is already assigned (e.g., duplicate)
+        // Ignore if user is already assigned
       }
     }
     if (users.length > 0) {
@@ -40,7 +46,108 @@ async function seedDefaultProject(
   return project.id;
 }
 
-export async function serveCommand(): Promise<void> {
+/**
+ * Hosted serve mode — boots from environment variables only, no config file needed.
+ * Used for cloud deployments (Render, ECS, etc.) where projects are managed via API.
+ */
+async function serveHosted(): Promise<void> {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.error('\n  DATABASE_URL is required for hosted mode.\n');
+    process.exit(1);
+  }
+
+  const authSecret = process.env.PUNCHLIST_AUTH_SECRET;
+  if (!authSecret) {
+    console.error('\n  PUNCHLIST_AUTH_SECRET is required for hosted mode.\n');
+    process.exit(1);
+  }
+
+  const githubToken = process.env.PUNCHLIST_GITHUB_TOKEN;
+  if (!githubToken) {
+    console.error('\n  PUNCHLIST_GITHUB_TOKEN is required for hosted mode.\n');
+    process.exit(1);
+  }
+
+  const corsDomains = process.env.CORS_DOMAINS
+    ? process.env.CORS_DOMAINS.split(',').map((d) => d.trim()).filter(Boolean)
+    : ['*'];
+
+  // Create storage adapter (always Postgres in hosted mode)
+  const storage = createStorageAdapter({
+    type: 'postgres',
+    databaseUrl,
+    encryptionSecret: authSecret,
+  });
+  await storage.initialize();
+
+  // Create auth adapter
+  const auth = new TokenAuthAdapter({ secret: authSecret, storage });
+
+  // Create a placeholder issue adapter (projects use the global token)
+  const issueAdapter = new GitHubIssueAdapter('placeholder/repo', githubToken);
+  const issueAdapterRegistry = new IssueAdapterRegistry();
+
+  const app = createApp({
+    issueAdapter,
+    issueAdapterRegistry,
+    storageAdapter: storage,
+    authAdapter: auth,
+    config: undefined,
+    corsDomains,
+  });
+
+  const port = Number(process.env.PORT) || DEFAULT_PORT;
+  const host = process.env.HOST || '0.0.0.0';
+  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+
+  const server = app.listen(port, host, async () => {
+    console.log(`\n  Punchlist QA Server (hosted mode)`);
+    console.log(`  Port: ${port}`);
+    console.log(`  Host: ${host}`);
+    console.log(`  Database: PostgreSQL`);
+    console.log(`  CORS: ${corsDomains.join(', ')}`);
+    console.log(`\n  Dashboard: http://${displayHost}:${port}/`);
+    console.log(`  Widget:    http://${displayHost}:${port}/widget.js`);
+    console.log(`  API:       http://${displayHost}:${port}/api/`);
+    console.log(`  Health:    http://${displayHost}:${port}/health`);
+
+    // Seed an admin user in hosted mode if none exists
+    const users = await storage.listUsers();
+    if (users.length === 0) {
+      const adminEmail = process.env.ADMIN_EMAIL || 'admin@punchlist.local';
+      const token = randomBytes(32).toString('hex');
+      const { createHash } = await import('node:crypto');
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+      await storage.createUser({
+        email: adminEmail,
+        name: 'Admin',
+        tokenHash,
+        role: 'admin',
+        invitedBy: adminEmail,
+      });
+      console.log(`\n  First-run: created admin user (${adminEmail})`);
+      console.log(`  Login:     http://${displayHost}:${port}/join?token=${encodeURIComponent(token)}`);
+    }
+    console.log('');
+  });
+
+  function shutdown(signal: string) {
+    console.log(`\n  Received ${signal}. Shutting down...`);
+    server.close(async () => {
+      await storage.close();
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10_000).unref();
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+/**
+ * Local serve mode — boots from punchlist.config.json + .env (original behavior).
+ */
+async function serveLocal(): Promise<void> {
   const { config, storage, auth } = await initAdapters();
 
   if (!config.secrets.githubToken) {
@@ -55,13 +162,10 @@ export async function serveCommand(): Promise<void> {
     config.projectName,
   );
 
-  // Create issue adapter for default project (legacy routes)
   const issueAdapter = new GitHubIssueAdapter(
     config.issueTracker.repo,
     config.secrets.githubToken,
   );
-
-  // Create issue adapter registry for multi-project routes
   const issueAdapterRegistry = new IssueAdapterRegistry();
 
   const app = createApp({
@@ -75,7 +179,6 @@ export async function serveCommand(): Promise<void> {
 
   const port = Number(process.env.PORT) || DEFAULT_PORT;
   const host = process.env.HOST || '127.0.0.1';
-
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;
 
   const server = app.listen(port, host, async () => {
@@ -89,7 +192,6 @@ export async function serveCommand(): Promise<void> {
     console.log(`  Widget:    http://${displayHost}:${port}/widget.js`);
     console.log(`  API:       http://${displayHost}:${port}/api/`);
 
-    // Seed dev user and print auto-login URL
     if (process.env.NODE_ENV === 'development') {
       const devEmail = 'dev@punchlist.local';
       const baseUrl = `http://${displayHost}:${port}`;
@@ -101,8 +203,6 @@ export async function serveCommand(): Promise<void> {
           baseUrl,
         });
         token = invite.token;
-
-        // Also assign dev user to default project
         try {
           await storage.addUserToProject(defaultProjectId, devEmail, 'admin');
         } catch {
@@ -130,4 +230,14 @@ export async function serveCommand(): Promise<void> {
   }
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+export async function serveCommand(options: ServeOptions = {}): Promise<void> {
+  const isHosted = options.hosted || process.env.PUNCHLIST_HOSTED === 'true';
+
+  if (isHosted) {
+    await serveHosted();
+  } else {
+    await serveLocal();
+  }
 }

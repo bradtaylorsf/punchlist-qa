@@ -46,4 +46,4 @@ EXPOSE 4747
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget --spider --quiet http://localhost:${PORT}/health || exit 1
 
-CMD ["node", "bin/punchlist.mjs", "serve"]
+CMD ["node", "bin/punchlist.mjs", "serve", "--hosted"]
