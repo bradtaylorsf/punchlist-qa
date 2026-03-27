@@ -1,10 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ConfigFetcher, ConfigFetcherError } from '../../shared/config-fetcher.js';
 import { requireAdmin } from '../middleware/require-admin.js';
-import { categorySchema, testCaseSchema } from '../../shared/schemas.js';
+import { categorySchema, testCaseSchema, partialConfigSchema } from '../../shared/schemas.js';
 import type { StorageAdapter } from '../../adapters/storage/types.js';
-import type { Category, TestCase } from '../../shared/schemas.js';
+import type { Category, TestCase, PartialConfig } from '../../shared/schemas.js';
 
 interface SyncDiff<T> {
   added: T[];
@@ -66,6 +65,85 @@ async function loadStoredConfig(
   };
 }
 
+class SyncFetchError extends Error {
+  readonly status: number;
+  readonly code: string;
+
+  constructor(message: string, status: number, code: string) {
+    super(message);
+    this.name = 'SyncFetchError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+async function fetchPartialConfig(
+  owner: string,
+  repo: string,
+  token: string,
+): Promise<PartialConfig> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/punchlist.config.json`;
+
+  let ghRes: Response;
+  try {
+    ghRes = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    });
+  } catch (err) {
+    throw new SyncFetchError(
+      `Network error fetching config: ${err instanceof Error ? err.message : String(err)}`,
+      502,
+      'NETWORK_ERROR',
+    );
+  }
+
+  if (ghRes.status === 404) {
+    throw new SyncFetchError(
+      `punchlist.config.json not found in ${owner}/${repo}`,
+      404,
+      'NOT_FOUND',
+    );
+  }
+  if (ghRes.status === 429 || (ghRes.status === 403 && ghRes.headers.get('x-ratelimit-remaining') === '0')) {
+    throw new SyncFetchError('GitHub API rate limit exceeded', 429, 'RATE_LIMITED');
+  }
+  if (ghRes.status === 403) {
+    throw new SyncFetchError('GitHub API access denied — check token permissions', 403, 'ACCESS_DENIED');
+  }
+  if (!ghRes.ok) {
+    throw new SyncFetchError(`GitHub API error: ${ghRes.status} ${ghRes.statusText}`, 502, 'NETWORK_ERROR');
+  }
+
+  let body: { content?: string };
+  try {
+    body = (await ghRes.json()) as { content?: string };
+  } catch {
+    throw new SyncFetchError('Invalid JSON response from GitHub API', 422, 'INVALID_CONFIG');
+  }
+  if (!body.content) {
+    throw new SyncFetchError('No content in GitHub API response', 422, 'INVALID_CONFIG');
+  }
+
+  let rawConfig: unknown;
+  try {
+    rawConfig = JSON.parse(Buffer.from(body.content, 'base64').toString('utf-8'));
+  } catch {
+    throw new SyncFetchError('Failed to decode or parse config content', 422, 'INVALID_CONFIG');
+  }
+
+  const result = partialConfigSchema.safeParse(rawConfig);
+  if (!result.success) {
+    const errors = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+    throw new SyncFetchError(`Invalid config: ${errors}`, 422, 'INVALID_CONFIG');
+  }
+
+  return result.data;
+}
+
 export function syncRouter(
   storageAdapter: StorageAdapter,
   githubToken: string,
@@ -107,21 +185,13 @@ export function syncRouter(
         return;
       }
       const [owner, repo] = parts;
-      const fetcher = new ConfigFetcher({ owner, repo, token: githubToken });
 
-      let remoteConfig;
+      let remoteConfig: PartialConfig;
       try {
-        remoteConfig = await fetcher.fetch(true);
+        remoteConfig = await fetchPartialConfig(owner, repo, githubToken);
       } catch (err) {
-        if (err instanceof ConfigFetcherError) {
-          const statusMap: Record<string, number> = {
-            NOT_FOUND: 404,
-            ACCESS_DENIED: 403,
-            RATE_LIMITED: 429,
-            INVALID_CONFIG: 422,
-            NETWORK_ERROR: 502,
-          };
-          res.status(statusMap[err.code] ?? 500).json({
+        if (err instanceof SyncFetchError) {
+          res.status(err.status).json({
             success: false,
             error: err.message,
             code: err.code,
