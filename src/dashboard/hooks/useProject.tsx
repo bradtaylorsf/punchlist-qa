@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import * as api from '../api/client';
 
-interface Project {
+export interface Project {
   id: string;
   repoSlug: string;
   name: string;
@@ -10,39 +11,24 @@ interface Project {
   updatedAt: string;
 }
 
+// ── Top-level provider: loads the full projects list ──
+
 interface ProjectContextValue {
-  currentProject: Project | null;
   projects: Project[];
   loading: boolean;
-  setCurrentProject: (project: Project) => void;
   refreshProjects: () => Promise<void>;
 }
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
 
-const PROJECT_KEY = 'punchlist-active-project-id';
-
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [currentProject, setCurrentProjectState] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadProjects = useCallback(async () => {
     try {
       const res = await api.listProjects();
-      const data = res.data;
-      setProjects(data);
-
-      // Restore from localStorage or pick first
-      const savedId = localStorage.getItem(PROJECT_KEY);
-      const saved = savedId ? data.find((p) => p.id === savedId) : null;
-      const selected = saved || data[0] || null;
-
-      if (selected) {
-        setCurrentProjectState(selected);
-        api.setActiveProject(selected.id);
-        localStorage.setItem(PROJECT_KEY, selected.id);
-      }
+      setProjects(res.data);
     } catch {
       // If fetching fails, continue without project context
     } finally {
@@ -54,16 +40,8 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     loadProjects();
   }, [loadProjects]);
 
-  const setCurrentProject = useCallback((project: Project) => {
-    setCurrentProjectState(project);
-    api.setActiveProject(project.id);
-    localStorage.setItem(PROJECT_KEY, project.id);
-  }, []);
-
   return (
-    <ProjectContext.Provider
-      value={{ currentProject, projects, loading, setCurrentProject, refreshProjects: loadProjects }}
-    >
+    <ProjectContext.Provider value={{ projects, loading, refreshProjects: loadProjects }}>
       {children}
     </ProjectContext.Provider>
   );
@@ -72,5 +50,62 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 export function useProject() {
   const ctx = useContext(ProjectContext);
   if (!ctx) throw new Error('useProject must be used within ProjectProvider');
+  return ctx;
+}
+
+// ── Workspace provider: derives current project from URL :projectId ──
+
+interface WorkspaceContextValue {
+  currentProject: Project;
+}
+
+const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
+
+export function WorkspaceProjectProvider({ children }: { children: ReactNode }) {
+  const { projectId } = useParams<{ projectId: string }>();
+  const { projects, loading } = useProject();
+
+  const project = projects.find((p) => p.id === projectId) ?? null;
+
+  // Sync module-level activeProjectId for API calls
+  useEffect(() => {
+    if (project) {
+      api.setActiveProject(project.id);
+    }
+    return () => {
+      api.setActiveProject(null);
+    };
+  }, [project?.id]);
+
+  // Wait for the project list to load before deciding "not found"
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-2">
+        <p className="text-gray-500">Project not found.</p>
+        <Link to="/" className="text-sm text-blue-600 hover:underline">
+          Back to Projects
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <WorkspaceContext.Provider value={{ currentProject: project }}>
+      {children}
+    </WorkspaceContext.Provider>
+  );
+}
+
+export function useWorkspaceProject() {
+  const ctx = useContext(WorkspaceContext);
+  if (!ctx) throw new Error('useWorkspaceProject must be used within WorkspaceProjectProvider');
   return ctx;
 }

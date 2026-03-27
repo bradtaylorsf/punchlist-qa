@@ -2,13 +2,15 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ProjectProvider } from './hooks/useProject';
 import { Layout } from './components/Layout';
+import { ProjectWorkspace } from './components/ProjectWorkspace';
 import { LoginPage } from './components/LoginPage';
 import { SetupPage } from './components/SetupPage';
 import { SetPasswordPage } from './components/SetPasswordPage';
+import { ProjectListPage } from './pages/ProjectListPage';
 import { TestingPage } from './pages/TestingPage';
 import { HistoryPage } from './pages/HistoryPage';
+import { ProjectSettingsPage } from './pages/ProjectSettingsPage';
 import { UsersPage } from './pages/UsersPage';
-import { ProjectsPage } from './pages/ProjectsPage';
 
 function ProtectedRoutes() {
   const { user, loading, setupRequired } = useAuth();
@@ -40,10 +42,21 @@ function ProtectedRoutes() {
     <ProjectProvider>
       <Layout>
         <Routes>
-          <Route path="/" element={<TestingPage />} />
-          <Route path="/history" element={<HistoryPage />} />
+          {/* Landing page: project list */}
+          <Route path="/" element={<ProjectListPage />} />
+
+          {/* Project workspace with sub-navigation */}
+          <Route path="/projects/:projectId" element={<ProjectWorkspace />}>
+            <Route index element={<Navigate to="testing" replace />} />
+            <Route path="testing" element={<TestingPage />} />
+            <Route path="history" element={<HistoryPage />} />
+            <Route path="settings" element={<ProjectSettingsPage />} />
+          </Route>
+
+          {/* Top-level admin pages */}
           <Route path="/users" element={<UsersPage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
+
+          {/* Catch-all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
