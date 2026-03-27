@@ -225,14 +225,14 @@ export function listProjects() {
   }>('/projects');
 }
 
-export function createProject(input: { repoSlug: string; name: string; githubToken?: string }) {
+export function createProject(input: { repoSlug: string; name?: string }) {
   return request<{ success: boolean; data: Record<string, unknown> }>('/projects', {
     method: 'POST',
     body: JSON.stringify(input),
   });
 }
 
-export function updateProject(id: string, input: { name?: string; githubToken?: string | null }) {
+export function updateProject(id: string, input: { name?: string }) {
   return request<{ success: boolean; data: Record<string, unknown> }>(`/projects/${id}`, {
     method: 'PUT',
     body: JSON.stringify(input),

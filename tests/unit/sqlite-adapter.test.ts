@@ -628,17 +628,15 @@ describe('projects', () => {
     expect(fetched).toEqual(project);
   });
 
-  it('creates project with encrypted GitHub token', async () => {
-    const project = await adapter.createProject({
-      repoSlug: 'owner/repo',
-      name: 'My Project',
-      githubToken: 'ghp_abc123',
-    });
+  it('auto-derives name from repo slug when name not provided', async () => {
+    const project = await adapter.createProject({ repoSlug: 'myorg/my-app' });
+    expect(project.name).toBe('my-app');
+    expect(project.repoSlug).toBe('myorg/my-app');
+  });
 
-    expect(project.githubTokenEncrypted).not.toBeNull();
-    expect(project.githubTokenEncrypted).not.toBe('ghp_abc123');
-    // The encrypted token should be in iv:authTag:ciphertext format
-    expect(project.githubTokenEncrypted!.split(':')).toHaveLength(4);
+  it('stores null for githubTokenEncrypted (tokens come from env)', async () => {
+    const project = await adapter.createProject({ repoSlug: 'owner/repo', name: 'P1' });
+    expect(project.githubTokenEncrypted).toBeNull();
   });
 
   it('enforces unique repo_slug', async () => {
@@ -678,27 +676,6 @@ describe('projects', () => {
     const updated = await adapter.updateProject(project.id, { name: 'Renamed' });
     expect(updated.name).toBe('Renamed');
     expect(updated.repoSlug).toBe('owner/repo');
-  });
-
-  it('updates project GitHub token', async () => {
-    const project = await adapter.createProject({ repoSlug: 'owner/repo', name: 'P1' });
-    expect(project.githubTokenEncrypted).toBeNull();
-
-    const updated = await adapter.updateProject(project.id, { githubToken: 'ghp_new' });
-    expect(updated.githubTokenEncrypted).not.toBeNull();
-    expect(updated.githubTokenEncrypted!.split(':')).toHaveLength(4);
-  });
-
-  it('clears project GitHub token with null', async () => {
-    const project = await adapter.createProject({
-      repoSlug: 'owner/repo',
-      name: 'P1',
-      githubToken: 'ghp_abc',
-    });
-    expect(project.githubTokenEncrypted).not.toBeNull();
-
-    const updated = await adapter.updateProject(project.id, { githubToken: null });
-    expect(updated.githubTokenEncrypted).toBeNull();
   });
 
   it('throws when updating non-existent project', async () => {

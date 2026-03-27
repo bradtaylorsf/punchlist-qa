@@ -105,13 +105,11 @@ export const projectUserSchema = z.object({
 
 export const createProjectInputSchema = z.object({
   repoSlug: z.string().min(1),
-  name: z.string().min(1),
-  githubToken: z.string().optional(),
+  name: z.string().min(1).optional(),
 });
 
 export const updateProjectInputSchema = z.object({
   name: z.string().min(1).optional(),
-  githubToken: z.string().nullable().optional(),
 });
 
 export const roundSchema = z.object({

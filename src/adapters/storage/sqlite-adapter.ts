@@ -20,7 +20,6 @@ import type {
   CreateProjectInput,
   UpdateProjectInput,
 } from '../../shared/types.js';
-import { encrypt } from '../../shared/encryption.js';
 import {
   rowToProject,
   rowToProjectUser,
@@ -74,13 +73,11 @@ export class SqliteAdapter implements StorageAdapter {
     const db = this.getDb();
     const id = randomUUID();
     const now = new Date().toISOString();
-    const encryptedToken = input.githubToken
-      ? encrypt(input.githubToken, this.requireEncryptionSecret())
-      : null;
+    const name = input.name ?? input.repoSlug.split('/').pop() ?? input.repoSlug;
     db.prepare(
       `INSERT INTO projects (id, repo_slug, name, github_token_encrypted, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(id, input.repoSlug, input.name, encryptedToken, now, now);
+       VALUES (?, ?, ?, NULL, ?, ?)`,
+    ).run(id, input.repoSlug, name, now, now);
     const row = db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as ProjectRow;
     return rowToProject(row);
   }
@@ -114,14 +111,6 @@ export class SqliteAdapter implements StorageAdapter {
     if (input.name !== undefined) {
       sets.push('name = ?');
       values.push(input.name);
-    }
-    if (input.githubToken !== undefined) {
-      sets.push('github_token_encrypted = ?');
-      values.push(
-        input.githubToken !== null
-          ? encrypt(input.githubToken, this.requireEncryptionSecret())
-          : null,
-      );
     }
 
     if (sets.length > 0) {

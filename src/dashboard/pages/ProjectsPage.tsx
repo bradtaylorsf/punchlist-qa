@@ -29,10 +29,8 @@ export function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Add project form
-  const [newName, setNewName] = useState('');
-  const [newRepoSlug, setNewRepoSlug] = useState('');
-  const [newGithubToken, setNewGithubToken] = useState('');
+  // Add project form — just the repo URL or slug
+  const [newRepo, setNewRepo] = useState('');
   const [adding, setAdding] = useState(false);
 
   // Delete confirmation
@@ -80,14 +78,9 @@ export function ProjectsPage() {
     setAdding(true);
     setError(null);
     try {
-      await api.createProject({
-        name: newName,
-        repoSlug: newRepoSlug,
-        ...(newGithubToken ? { githubToken: newGithubToken } : {}),
-      });
-      setNewName('');
-      setNewRepoSlug('');
-      setNewGithubToken('');
+      // Server handles URL parsing and name derivation
+      await api.createProject({ repoSlug: newRepo.trim() });
+      setNewRepo('');
       await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create project');
@@ -135,42 +128,21 @@ export function ProjectsPage() {
       {/* Add Project Form */}
       <div className="bg-white border border-gray-200 rounded-lg p-4">
         <h2 className="text-sm font-medium text-gray-700 mb-3">Add Project</h2>
-        <form onSubmit={handleAddProject} className="flex items-end gap-3 flex-wrap">
-          <div className="flex-1 min-w-[160px]">
-            <label className="block text-xs text-gray-500 mb-1">Name</label>
+        <form onSubmit={handleAddProject} className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="block text-xs text-gray-500 mb-1">GitHub Repository</label>
             <input
               type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
+              value={newRepo}
+              onChange={(e) => setNewRepo(e.target.value)}
               required
               className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm"
-              placeholder="My Project"
-            />
-          </div>
-          <div className="flex-1 min-w-[160px]">
-            <label className="block text-xs text-gray-500 mb-1">Repo Slug</label>
-            <input
-              type="text"
-              value={newRepoSlug}
-              onChange={(e) => setNewRepoSlug(e.target.value)}
-              required
-              className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm"
-              placeholder="owner/repo"
-            />
-          </div>
-          <div className="flex-1 min-w-[160px]">
-            <label className="block text-xs text-gray-500 mb-1">GitHub Token (optional)</label>
-            <input
-              type="password"
-              value={newGithubToken}
-              onChange={(e) => setNewGithubToken(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm"
-              placeholder="ghp_..."
+              placeholder="owner/repo or https://github.com/owner/repo"
             />
           </div>
           <button
             type="submit"
-            disabled={adding}
+            disabled={adding || !newRepo.trim()}
             className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
           >
             {adding ? 'Adding...' : 'Add Project'}

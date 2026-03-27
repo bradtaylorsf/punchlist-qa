@@ -18,7 +18,6 @@ import type {
   CreateProjectInput,
   UpdateProjectInput,
 } from '../../shared/types.js';
-import { encrypt } from '../../shared/encryption.js';
 import {
   rowToProject,
   rowToProjectUser,
@@ -69,13 +68,11 @@ export class PostgresAdapter implements StorageAdapter {
     const pool = this.getPool();
     const id = randomUUID();
     const now = new Date().toISOString();
-    const encryptedToken = input.githubToken
-      ? encrypt(input.githubToken, this.requireEncryptionSecret())
-      : null;
+    const name = input.name ?? input.repoSlug.split('/').pop() ?? input.repoSlug;
     await pool.query(
       `INSERT INTO projects (id, repo_slug, name, github_token_encrypted, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, input.repoSlug, input.name, encryptedToken, now, now],
+       VALUES ($1, $2, $3, NULL, $4, $5)`,
+      [id, input.repoSlug, name, now, now],
     );
     const { rows } = await pool.query<ProjectRow>('SELECT * FROM projects WHERE id = $1', [id]);
     return rowToProject(rows[0]);
@@ -113,14 +110,6 @@ export class PostgresAdapter implements StorageAdapter {
     if (input.name !== undefined) {
       sets.push(`name = $${paramIndex++}`);
       values.push(input.name);
-    }
-    if (input.githubToken !== undefined) {
-      sets.push(`github_token_encrypted = $${paramIndex++}`);
-      values.push(
-        input.githubToken !== null
-          ? encrypt(input.githubToken, this.requireEncryptionSecret())
-          : null,
-      );
     }
 
     if (sets.length > 0) {
