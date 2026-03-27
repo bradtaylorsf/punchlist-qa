@@ -6,6 +6,7 @@ import {
   accessRequestSchema,
   projectSchema,
   projectUserSchema,
+  githubTokenSchema,
 } from '../../shared/schemas.js';
 import type {
   Round,
@@ -16,6 +17,7 @@ import type {
   AccessRequestStatus,
   Project,
   ProjectUser,
+  GitHubToken,
 } from '../../shared/types.js';
 
 /**
@@ -193,5 +195,24 @@ export function rowToAccessRequest(row: AccessRequestRow): AccessRequest {
     reviewedAt: toISOString(row.reviewed_at),
     createdAt: toISOString(row.created_at),
     projectId: row.project_id,
+  });
+}
+
+// --- GitHub Token rows ---
+
+export interface GitHubTokenRow {
+  id: number;
+  owner: string;
+  token_encrypted: string;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+export function rowToGitHubToken(row: GitHubTokenRow): GitHubToken {
+  return githubTokenSchema.parse({
+    id: row.id,
+    owner: row.owner,
+    createdAt: toISOString(row.created_at),
+    updatedAt: toISOString(row.updated_at),
   });
 }

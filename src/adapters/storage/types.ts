@@ -5,6 +5,7 @@ import type {
   AccessRequest,
   Project,
   ProjectUser,
+  GitHubToken,
   CreateRoundInput,
   UpdateRoundInput,
   SubmitResultInput,
@@ -139,4 +140,21 @@ export interface StorageAdapter {
 
   /** Update access request status */
   updateAccessRequestStatus(id: string, status: string, reviewedBy: string): Promise<AccessRequest>;
+
+  // --- GitHub Tokens ---
+
+  /** Create or update a GitHub token for an owner (upsert) */
+  createOrUpdateGitHubToken(owner: string, tokenEncrypted: string): Promise<GitHubToken>;
+
+  /** Get a GitHub token entry by owner, or null if not found */
+  getGitHubToken(owner: string): Promise<GitHubToken | null>;
+
+  /** Get the encrypted token string for an owner, or null if not found */
+  getGitHubTokenEncrypted(owner: string): Promise<string | null>;
+
+  /** List all registered GitHub token entries (tokens are NOT included) */
+  listGitHubTokens(): Promise<GitHubToken[]>;
+
+  /** Delete a GitHub token by owner (idempotent) */
+  deleteGitHubToken(owner: string): Promise<void>;
 }

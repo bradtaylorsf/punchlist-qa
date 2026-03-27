@@ -64,8 +64,7 @@ async function serveHosted(): Promise<void> {
 
   const githubToken = process.env.PUNCHLIST_GITHUB_TOKEN;
   if (!githubToken) {
-    console.error('\n  PUNCHLIST_GITHUB_TOKEN is required for hosted mode.\n');
-    process.exit(1);
+    console.warn('\n  PUNCHLIST_GITHUB_TOKEN not set. Config sync requires per-org tokens via the dashboard.\n');
   }
 
   const corsDomains = process.env.CORS_DOMAINS
@@ -80,8 +79,8 @@ async function serveHosted(): Promise<void> {
   });
   await storage.initialize();
 
-  // Create a placeholder issue adapter (projects use the global token)
-  const issueAdapter = new GitHubIssueAdapter('placeholder/repo', githubToken);
+  // Create a placeholder issue adapter (legacy routes; per-org tokens resolve via registry)
+  const issueAdapter = new GitHubIssueAdapter('placeholder/repo', githubToken ?? 'no-token-set');
   const issueAdapterRegistry = new IssueAdapterRegistry();
 
   const app = createApp({

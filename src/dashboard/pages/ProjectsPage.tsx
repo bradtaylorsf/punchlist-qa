@@ -88,6 +88,147 @@ function SyncDiffSummary({ data }: { data: SyncResultData }) {
   );
 }
 
+interface GitHubTokenEntry {
+  id: number;
+  owner: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function GitHubTokensSection({ onError }: { onError: (msg: string) => void }) {
+  const [tokens, setTokens] = useState<GitHubTokenEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [owner, setOwner] = useState('');
+  const [token, setToken] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [removingKey, setRemovingKey] = useState<string | null>(null);
+
+  const loadTokens = useCallback(async () => {
+    try {
+      const res = await api.listGitHubTokens();
+      setTokens(res.data);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTokens();
+  }, [loadTokens]);
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmedOwner = owner.trim();
+    const trimmedToken = token.trim();
+    if (!trimmedOwner || !trimmedToken) return;
+    setAdding(true);
+    try {
+      await api.createGitHubToken({ owner: trimmedOwner, token: trimmedToken });
+      setOwner('');
+      setToken('');
+      await loadTokens();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed to save token');
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleRemove(ownerName: string) {
+    setRemovingKey(ownerName);
+    try {
+      await api.deleteGitHubToken(ownerName);
+      await loadTokens();
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Failed to remove token');
+    } finally {
+      setRemovingKey(null);
+    }
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100">
+        <h2 className="text-sm font-medium text-gray-700">GitHub Tokens</h2>
+        <p className="text-xs text-gray-500 mt-0.5">
+          Register a GitHub token per organization or user account. Used for config sync and issue creation.
+        </p>
+      </div>
+
+      {/* Existing tokens */}
+      {!loading && tokens.length > 0 && (
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="text-left px-4 py-2 font-medium text-gray-600">Owner</th>
+              <th className="text-left px-4 py-2 font-medium text-gray-600">Added</th>
+              <th className="text-right px-4 py-2 font-medium text-gray-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {tokens.map((t) => (
+              <tr key={t.owner}>
+                <td className="px-4 py-2 text-gray-900 font-mono text-xs">{t.owner}</td>
+                <td className="px-4 py-2 text-gray-500">
+                  {new Date(t.createdAt).toLocaleDateString()}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <button
+                    onClick={() => handleRemove(t.owner)}
+                    disabled={removingKey === t.owner}
+                    className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                  >
+                    {removingKey === t.owner ? 'Removing...' : 'Remove'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {!loading && tokens.length === 0 && (
+        <div className="px-4 py-3 text-xs text-gray-500">
+          No tokens registered. Falling back to the global PUNCHLIST_GITHUB_TOKEN environment variable.
+        </div>
+      )}
+
+      {/* Add token form */}
+      <form onSubmit={handleAdd} className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-end gap-3">
+        <div className="flex-1">
+          <label className="block text-xs text-gray-500 mb-1">GitHub owner (org or username)</label>
+          <input
+            type="text"
+            value={owner}
+            onChange={(e) => setOwner(e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm"
+            placeholder="e.g. the-answerai"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="block text-xs text-gray-500 mb-1">GitHub token</label>
+          <input
+            type="password"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm"
+            placeholder="ghp_... or github_pat_..."
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={adding || !owner.trim() || !token.trim()}
+          className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+        >
+          {adding ? 'Saving...' : 'Add'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export function ProjectsPage() {
   const { user } = useAuth();
   const { refreshProjects } = useProject();
@@ -266,6 +407,9 @@ export function ProjectsPage() {
           </button>
         </form>
       </div>
+
+      {/* GitHub Tokens */}
+      <GitHubTokensSection onError={setError} />
 
       {/* Projects List */}
       {loading ? (

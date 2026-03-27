@@ -134,6 +134,20 @@ export const migrations: Migration[] = [
       ALTER TABLE users ADD COLUMN password_hash TEXT;
     `,
   },
+  {
+    version: 6,
+    description: 'Create github_tokens table for per-org token registry',
+    up: `
+      CREATE TABLE github_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner TEXT NOT NULL UNIQUE,
+        token_encrypted TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_github_tokens_owner ON github_tokens(owner);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database.Database): void {

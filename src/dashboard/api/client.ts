@@ -377,3 +377,27 @@ export function rejectAccessRequest(id: string) {
 export function getCommitSha() {
   return request<{ success: boolean; data: { sha: string } }>('/commit');
 }
+
+// GitHub Tokens
+export function listGitHubTokens() {
+  return request<{
+    success: boolean;
+    data: Array<{ id: number; owner: string; createdAt: string; updatedAt: string }>;
+  }>('/github-tokens');
+}
+
+export function createGitHubToken(input: { owner: string; token: string }) {
+  return request<{
+    success: boolean;
+    data: { id: number; owner: string; createdAt: string; updatedAt: string };
+  }>('/github-tokens', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteGitHubToken(owner: string) {
+  return request<{ success: boolean }>(`/github-tokens/${encodeURIComponent(owner)}`, {
+    method: 'DELETE',
+  });
+}

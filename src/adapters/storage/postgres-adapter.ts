@@ -16,6 +16,7 @@ import type {
   CreateAccessRequestInput,
   CreateProjectInput,
   UpdateProjectInput,
+  GitHubToken,
 } from '../../shared/types.js';
 import {
   rowToProject,
@@ -24,6 +25,7 @@ import {
   rowToResult,
   rowToUser,
   rowToAccessRequest,
+  rowToGitHubToken,
 } from './row-converters.js';
 import type {
   ProjectRow,
@@ -32,6 +34,7 @@ import type {
   ResultRow,
   UserRow,
   AccessRequestRow,
+  GitHubTokenRow,
 } from './row-converters.js';
 
 interface PostgresAdapterOptions {
@@ -530,6 +533,55 @@ export class PostgresAdapter implements StorageAdapter {
       [id],
     );
     return rowToAccessRequest(rows[0]);
+  }
+
+  // --- GitHub Tokens ---
+
+  async createOrUpdateGitHubToken(owner: string, tokenEncrypted: string): Promise<GitHubToken> {
+    const pool = this.getPool();
+    const now = new Date().toISOString();
+    await pool.query(
+      `INSERT INTO github_tokens (owner, token_encrypted, created_at, updated_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT(owner) DO UPDATE SET token_encrypted = $2, updated_at = $4`,
+      [owner, tokenEncrypted, now, now],
+    );
+    const { rows } = await pool.query<GitHubTokenRow>(
+      'SELECT * FROM github_tokens WHERE owner = $1',
+      [owner],
+    );
+    return rowToGitHubToken(rows[0]);
+  }
+
+  async getGitHubToken(owner: string): Promise<GitHubToken | null> {
+    const pool = this.getPool();
+    const { rows } = await pool.query<GitHubTokenRow>(
+      'SELECT * FROM github_tokens WHERE owner = $1',
+      [owner],
+    );
+    return rows[0] ? rowToGitHubToken(rows[0]) : null;
+  }
+
+  async getGitHubTokenEncrypted(owner: string): Promise<string | null> {
+    const pool = this.getPool();
+    const { rows } = await pool.query<{ token_encrypted: string }>(
+      'SELECT token_encrypted FROM github_tokens WHERE owner = $1',
+      [owner],
+    );
+    return rows[0]?.token_encrypted ?? null;
+  }
+
+  async listGitHubTokens(): Promise<GitHubToken[]> {
+    const pool = this.getPool();
+    const { rows } = await pool.query<GitHubTokenRow>(
+      'SELECT * FROM github_tokens ORDER BY owner ASC',
+    );
+    return rows.map(rowToGitHubToken);
+  }
+
+  async deleteGitHubToken(owner: string): Promise<void> {
+    const pool = this.getPool();
+    await pool.query('DELETE FROM github_tokens WHERE owner = $1', [owner]);
   }
 
   // --- Internal ---
