@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { DEFAULT_PORT } from '../../shared/constants.js';
 import { GitHubIssueAdapter } from '../../adapters/issues/index.js';
 import { IssueAdapterRegistry } from '../../adapters/issues/registry.js';
@@ -116,18 +115,13 @@ async function serveHosted(): Promise<void> {
     const users = await storage.listUsers();
     if (users.length === 0) {
       const adminEmail = process.env.ADMIN_EMAIL || 'admin@punchlist.local';
-      const token = randomBytes(32).toString('hex');
-      const { createHash } = await import('node:crypto');
-      const tokenHash = createHash('sha256').update(token).digest('hex');
-      await storage.createUser({
-        email: adminEmail,
-        name: 'Admin',
-        tokenHash,
+      const baseUrl = `http://${displayHost}:${port}`;
+      const invite = await auth.createInvite(adminEmail, 'Admin', adminEmail, {
         role: 'admin',
-        invitedBy: adminEmail,
+        baseUrl,
       });
       console.log(`\n  First-run: created admin user (${adminEmail})`);
-      console.log(`  Login:     http://${displayHost}:${port}/join?token=${encodeURIComponent(token)}`);
+      console.log(`  Login:     ${invite.inviteUrl}`);
     }
     console.log('');
   });
