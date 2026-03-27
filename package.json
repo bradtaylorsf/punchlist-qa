@@ -1,6 +1,6 @@
 {
   "name": "punchlist-qa",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Standalone QA testing dashboard and support widget toolkit for any project",
   "license": "MIT",
   "author": "Brad Taylor <brad@bradtaylorsf.com>",
