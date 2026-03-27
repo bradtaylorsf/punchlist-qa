@@ -112,6 +112,20 @@ export const updateProjectInputSchema = z.object({
   name: z.string().min(1).optional(),
 });
 
+// --- GitHub Token registry schemas ---
+
+export const githubTokenSchema = z.object({
+  id: z.number().int(),
+  owner: z.string().min(1),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const createGitHubTokenInputSchema = z.object({
+  owner: z.string().min(1).regex(/^[a-zA-Z0-9._-]+$/, 'Owner must be a valid GitHub username or org slug'),
+  token: z.string().min(1),
+});
+
 export const roundSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -460,3 +474,5 @@ export type Project = z.infer<typeof projectSchema>;
 export type ProjectUser = z.infer<typeof projectUserSchema>;
 export type CreateProjectInput = z.infer<typeof createProjectInputSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectInputSchema>;
+export type GitHubToken = z.infer<typeof githubTokenSchema>;
+export type CreateGitHubTokenInput = z.infer<typeof createGitHubTokenInputSchema>;

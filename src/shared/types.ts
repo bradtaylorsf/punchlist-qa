@@ -45,4 +45,6 @@ export type {
   ProjectUser,
   CreateProjectInput,
   UpdateProjectInput,
+  GitHubToken,
+  CreateGitHubTokenInput,
 } from './schemas.js';

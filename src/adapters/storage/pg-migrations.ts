@@ -118,6 +118,20 @@ export const pgMigrations: PgMigration[] = [
       ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
     `,
   },
+  {
+    version: 3,
+    description: 'Create github_tokens table for per-org token registry',
+    up: `
+      CREATE TABLE IF NOT EXISTS github_tokens (
+        id SERIAL PRIMARY KEY,
+        owner TEXT NOT NULL UNIQUE,
+        token_encrypted TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_github_tokens_owner ON github_tokens(owner);
+    `,
+  },
 ];
 
 export async function runPgMigrations(pool: Pool): Promise<void> {

@@ -12,6 +12,7 @@ import { roundsRouter } from './routes/rounds.js';
 import { resultsRouter } from './routes/results.js';
 import { configRouter } from './routes/config.js';
 import { syncRouter } from './routes/sync.js';
+import { githubTokensRouter } from './routes/github-tokens.js';
 import { issuesRouter } from './routes/issues-api.js';
 import { commitRouter } from './routes/commit.js';
 import { usersRouter } from './routes/users-api.js';
@@ -122,14 +123,15 @@ export function createApp(deps: AppDependencies): Express {
       projectScope,
       configRouter({ config: deps.config, storageAdapter: storage }),
     );
-    if (deps.githubToken) {
-      app.use(
-        '/api/projects/:projectId/sync',
-        requireAuth,
-        projectScope,
-        syncRouter(storage, deps.githubToken),
-      );
-    }
+    app.use(
+      '/api/projects/:projectId/sync',
+      requireAuth,
+      projectScope,
+      syncRouter(storage, sessionSecret),
+    );
+
+    // GitHub token registry (admin-only)
+    app.use('/api/github-tokens', requireAuth, githubTokensRouter(storage, sessionSecret));
 
     // --- Legacy unscoped routes (backward compat via default project) ---
     app.use('/api/rounds', requireAuth, defaultProject, roundsRouter(storage));

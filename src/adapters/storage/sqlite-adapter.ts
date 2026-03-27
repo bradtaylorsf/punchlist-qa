@@ -18,6 +18,7 @@ import type {
   CreateAccessRequestInput,
   CreateProjectInput,
   UpdateProjectInput,
+  GitHubToken,
 } from '../../shared/types.js';
 import {
   rowToProject,
@@ -26,6 +27,7 @@ import {
   rowToResult,
   rowToUser,
   rowToAccessRequest,
+  rowToGitHubToken,
 } from './row-converters.js';
 import type {
   ProjectRow,
@@ -34,6 +36,7 @@ import type {
   ResultRow,
   UserRow,
   AccessRequestRow,
+  GitHubTokenRow,
 } from './row-converters.js';
 
 interface SqliteAdapterOptions {
@@ -481,6 +484,45 @@ export class SqliteAdapter implements StorageAdapter {
     db.prepare('UPDATE access_requests SET status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ?').run(status, reviewedBy, now, id);
     const row = db.prepare('SELECT * FROM access_requests WHERE id = ?').get(id) as AccessRequestRow;
     return rowToAccessRequest(row);
+  }
+
+  // --- GitHub Tokens ---
+
+  async createOrUpdateGitHubToken(owner: string, tokenEncrypted: string): Promise<GitHubToken> {
+    const db = this.getDb();
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO github_tokens (owner, token_encrypted, created_at, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(owner) DO UPDATE SET token_encrypted = ?, updated_at = ?`,
+    ).run(owner, tokenEncrypted, now, now, tokenEncrypted, now);
+    const row = db.prepare('SELECT * FROM github_tokens WHERE owner = ?').get(owner) as GitHubTokenRow;
+    return rowToGitHubToken(row);
+  }
+
+  async getGitHubToken(owner: string): Promise<GitHubToken | null> {
+    const row = this.getDb().prepare('SELECT * FROM github_tokens WHERE owner = ?').get(owner) as
+      | GitHubTokenRow
+      | undefined;
+    return row ? rowToGitHubToken(row) : null;
+  }
+
+  async getGitHubTokenEncrypted(owner: string): Promise<string | null> {
+    const row = this.getDb()
+      .prepare('SELECT token_encrypted FROM github_tokens WHERE owner = ?')
+      .get(owner) as { token_encrypted: string } | undefined;
+    return row?.token_encrypted ?? null;
+  }
+
+  async listGitHubTokens(): Promise<GitHubToken[]> {
+    const rows = this.getDb()
+      .prepare('SELECT * FROM github_tokens ORDER BY owner ASC')
+      .all() as GitHubTokenRow[];
+    return rows.map(rowToGitHubToken);
+  }
+
+  async deleteGitHubToken(owner: string): Promise<void> {
+    this.getDb().prepare('DELETE FROM github_tokens WHERE owner = ?').run(owner);
   }
 
   // --- Internal ---

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAdmin } from '../middleware/require-admin.js';
 import { categorySchema, testCaseSchema, partialConfigSchema } from '../../shared/schemas.js';
+import { resolveTokenForRepo } from '../../shared/token-resolver.js';
 import type { StorageAdapter } from '../../adapters/storage/types.js';
 import type { Category, TestCase, PartialConfig } from '../../shared/schemas.js';
 
@@ -146,7 +147,7 @@ async function fetchPartialConfig(
 
 export function syncRouter(
   storageAdapter: StorageAdapter,
-  githubToken: string,
+  encryptionSecret: string,
 ): Router {
   const router = Router({ mergeParams: true });
 
@@ -186,9 +187,21 @@ export function syncRouter(
       }
       const [owner, repo] = parts;
 
+      let token: string;
+      try {
+        token = await resolveTokenForRepo(project.repoSlug, storageAdapter, encryptionSecret);
+      } catch (err) {
+        res.status(422).json({
+          success: false,
+          error: err instanceof Error ? err.message : 'No GitHub token configured',
+          code: 'NO_TOKEN',
+        });
+        return;
+      }
+
       let remoteConfig: PartialConfig;
       try {
-        remoteConfig = await fetchPartialConfig(owner, repo, githubToken);
+        remoteConfig = await fetchPartialConfig(owner, repo, token);
       } catch (err) {
         if (err instanceof SyncFetchError) {
           res.status(err.status).json({

@@ -29,9 +29,9 @@ describe('IssueAdapterRegistry', () => {
     MockGitHubIssueAdapter.mockClear();
   });
 
-  describe('getAdapter', () => {
+  describe('getAdapterWithToken', () => {
     it('should return a GitHubIssueAdapter instance', () => {
-      const adapter = registry.getAdapter('org/repo', 'token-abc');
+      const adapter = registry.getAdapterWithToken('org/repo', 'token-abc');
 
       expect(adapter).toBeDefined();
       expect(MockGitHubIssueAdapter).toHaveBeenCalledTimes(1);
@@ -39,24 +39,24 @@ describe('IssueAdapterRegistry', () => {
     });
 
     it('should return the same instance for the same repoSlug', () => {
-      const first = registry.getAdapter('org/repo', 'token-abc');
-      const second = registry.getAdapter('org/repo', 'token-abc');
+      const first = registry.getAdapterWithToken('org/repo', 'token-abc');
+      const second = registry.getAdapterWithToken('org/repo', 'token-abc');
 
       expect(first).toBe(second);
       expect(MockGitHubIssueAdapter).toHaveBeenCalledTimes(1);
     });
 
     it('should return the same cached instance even if token differs on second call', () => {
-      const first = registry.getAdapter('org/repo', 'token-abc');
-      const second = registry.getAdapter('org/repo', 'token-xyz');
+      const first = registry.getAdapterWithToken('org/repo', 'token-abc');
+      const second = registry.getAdapterWithToken('org/repo', 'token-xyz');
 
       expect(first).toBe(second);
       expect(MockGitHubIssueAdapter).toHaveBeenCalledTimes(1);
     });
 
     it('should return different instances for different repoSlugs', () => {
-      const adapterA = registry.getAdapter('org/repo-a', 'token-abc');
-      const adapterB = registry.getAdapter('org/repo-b', 'token-abc');
+      const adapterA = registry.getAdapterWithToken('org/repo-a', 'token-abc');
+      const adapterB = registry.getAdapterWithToken('org/repo-b', 'token-abc');
 
       expect(adapterA).not.toBe(adapterB);
       expect(MockGitHubIssueAdapter).toHaveBeenCalledTimes(2);
@@ -65,23 +65,23 @@ describe('IssueAdapterRegistry', () => {
 
   describe('invalidate', () => {
     it('should remove the cached adapter so that the next getAdapter creates a new instance', () => {
-      const first = registry.getAdapter('org/repo', 'token-abc');
+      const first = registry.getAdapterWithToken('org/repo', 'token-abc');
 
       registry.invalidate('org/repo');
 
-      const second = registry.getAdapter('org/repo', 'token-abc');
+      const second = registry.getAdapterWithToken('org/repo', 'token-abc');
 
       expect(first).not.toBe(second);
       expect(MockGitHubIssueAdapter).toHaveBeenCalledTimes(2);
     });
 
     it('should not affect other cached adapters when invalidating one repoSlug', () => {
-      const adapterA = registry.getAdapter('org/repo-a', 'token-abc');
-      registry.getAdapter('org/repo-b', 'token-abc');
+      const adapterA = registry.getAdapterWithToken('org/repo-a', 'token-abc');
+      registry.getAdapterWithToken('org/repo-b', 'token-abc');
 
       registry.invalidate('org/repo-b');
 
-      const adapterAAgain = registry.getAdapter('org/repo-a', 'token-abc');
+      const adapterAAgain = registry.getAdapterWithToken('org/repo-a', 'token-abc');
       expect(adapterA).toBe(adapterAAgain);
     });
 
@@ -92,13 +92,13 @@ describe('IssueAdapterRegistry', () => {
 
   describe('clear', () => {
     it('should remove all cached adapters so the next getAdapter creates new instances', () => {
-      const firstA = registry.getAdapter('org/repo-a', 'token-abc');
-      const firstB = registry.getAdapter('org/repo-b', 'token-abc');
+      const firstA = registry.getAdapterWithToken('org/repo-a', 'token-abc');
+      const firstB = registry.getAdapterWithToken('org/repo-b', 'token-abc');
 
       registry.clear();
 
-      const secondA = registry.getAdapter('org/repo-a', 'token-abc');
-      const secondB = registry.getAdapter('org/repo-b', 'token-abc');
+      const secondA = registry.getAdapterWithToken('org/repo-a', 'token-abc');
+      const secondB = registry.getAdapterWithToken('org/repo-b', 'token-abc');
 
       expect(firstA).not.toBe(secondA);
       expect(firstB).not.toBe(secondB);
