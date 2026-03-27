@@ -50,6 +50,9 @@ export function createApp(deps: AppDependencies): Express {
   }
   const sessionSecret = deps.sessionSecret;
 
+  // Trust reverse proxy (Render, ECS ALB, etc.) so secure cookies work behind TLS termination
+  app.set('trust proxy', 1);
+
   // Health check — no auth, no CORS, no body parsing
   app.get('/health', async (_req, res) => {
     try {
