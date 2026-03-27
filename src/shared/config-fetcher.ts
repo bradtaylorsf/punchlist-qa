@@ -45,7 +45,7 @@ export class ConfigFetcher {
     this.owner = opts.owner;
     this.repo = opts.repo;
     this.token = opts.token;
-    this.branch = opts.branch ?? 'main';
+    this.branch = opts.branch ?? '';
     this.ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS;
   }
 
@@ -57,7 +57,8 @@ export class ConfigFetcher {
       }
     }
 
-    const url = `https://api.github.com/repos/${this.owner}/${this.repo}/contents/punchlist.config.json?ref=${encodeURIComponent(this.branch)}`;
+    const refParam = this.branch ? `?ref=${encodeURIComponent(this.branch)}` : '';
+    const url = `https://api.github.com/repos/${this.owner}/${this.repo}/contents/punchlist.config.json${refParam}`;
 
     let res: Response;
     try {
@@ -76,8 +77,9 @@ export class ConfigFetcher {
     }
 
     if (res.status === 404) {
+      const ref = this.branch ? `@${this.branch}` : ' (default branch)';
       throw new ConfigFetcherError(
-        `Config not found: ${this.owner}/${this.repo}@${this.branch}`,
+        `Config not found: ${this.owner}/${this.repo}${ref}`,
         'NOT_FOUND',
       );
     }
