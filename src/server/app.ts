@@ -69,7 +69,7 @@ export function createApp(deps: AppDependencies): Express {
   }
 
   // Protected routes (require valid session)
-  if (deps.storageAdapter && deps.authAdapter && deps.config) {
+  if (deps.storageAdapter && deps.authAdapter) {
     const auth = requireAuth(deps.authAdapter);
     const storage = deps.storageAdapter;
     const defaultProject = defaultProjectContext(storage);

@@ -102,7 +102,7 @@ export async function main(argv: string[]): Promise<void> {
     }
     case 'serve': {
       const { serveCommand } = await import('./commands/serve.js');
-      await serveCommand();
+      await serveCommand({ hosted: values.hosted as boolean });
       break;
     }
     case 'invite': {

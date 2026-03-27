@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: punchlist-qa
+    runtime: docker
+    dockerfilePath: ./Dockerfile.prod
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: "4747"
+      - key: PUNCHLIST_HOSTED
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: punchlist-db
+          property: connectionString
+      - key: PUNCHLIST_AUTH_SECRET
+        generateValue: true
+      - key: PUNCHLIST_GITHUB_TOKEN
+        sync: false
+      - key: CORS_DOMAINS
+        value: "*"
+    healthCheckPath: /health
+
+databases:
+  - name: punchlist-db
+    plan: free
+    databaseName: punchlist
+    postgresMajorVersion: "16"
