@@ -94,6 +94,14 @@ export class PostgresAdapter implements StorageAdapter {
     return rows[0] ? rowToProject(rows[0]) : null;
   }
 
+  async getProjectByName(name: string): Promise<Project | null> {
+    const { rows } = await this.getPool().query<ProjectRow>(
+      'SELECT * FROM projects WHERE name = $1',
+      [name],
+    );
+    return rows[0] ? rowToProject(rows[0]) : null;
+  }
+
   async listProjects(): Promise<Project[]> {
     const { rows } = await this.getPool().query<ProjectRow>(
       'SELECT * FROM projects ORDER BY created_at DESC',

@@ -96,6 +96,13 @@ export class SqliteAdapter implements StorageAdapter {
     return row ? rowToProject(row) : null;
   }
 
+  async getProjectByName(name: string): Promise<Project | null> {
+    const row = this.getDb().prepare('SELECT * FROM projects WHERE name = ?').get(name) as
+      | ProjectRow
+      | undefined;
+    return row ? rowToProject(row) : null;
+  }
+
   async listProjects(): Promise<Project[]> {
     const rows = this.getDb()
       .prepare('SELECT * FROM projects ORDER BY rowid DESC')

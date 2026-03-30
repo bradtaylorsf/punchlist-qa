@@ -288,6 +288,10 @@ export const supportTicketRequestSchema = z.object({
   description: z.string().max(5000).optional().default(''),
   userName: z.string().max(100).optional(),
   userEmail: z.string().email().optional(),
+  /** Project ID (UUID) — used in hosted mode to resolve the correct GitHub repo */
+  projectId: z.string().uuid().optional(),
+  /** Project name — alternative to projectId for widget convenience */
+  projectName: z.string().min(1).optional(),
   context: z
     .object({
       userAgent: z.string().optional(),

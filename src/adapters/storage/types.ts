@@ -33,6 +33,9 @@ export interface StorageAdapter {
   /** Get a project by repo slug, or null if not found */
   getProjectByRepoSlug(repoSlug: string): Promise<Project | null>;
 
+  /** Get a project by name, or null if not found */
+  getProjectByName(name: string): Promise<Project | null>;
+
   /** List all projects */
   listProjects(): Promise<Project[]>;
 

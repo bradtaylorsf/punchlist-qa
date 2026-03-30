@@ -91,7 +91,12 @@ export function createApp(deps: AppDependencies): Express {
   app.use('/api/support', corsMiddleware(deps.corsDomains));
 
   // Public routes (no auth required)
-  app.use('/api/support', supportRouter(deps.issueAdapter));
+  app.use('/api/support', supportRouter({
+    issueAdapter: deps.issueAdapter,
+    issueAdapterRegistry: deps.issueAdapterRegistry,
+    storageAdapter: deps.storageAdapter,
+    encryptionSecret: deps.sessionSecret,
+  }));
 
   if (deps.storageAdapter) {
     app.use('/api/auth', authRouter(deps.storageAdapter, sessionSecret));

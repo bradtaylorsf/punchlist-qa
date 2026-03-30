@@ -124,6 +124,17 @@ export function projectsRouter(storageAdapter: StorageAdapter): Router {
         res.status(400).json({ success: false, error: 'email is required' });
         return;
       }
+
+      // Verify the user exists before adding to project (foreign key constraint)
+      const existingUser = await storageAdapter.getUserByEmail(email);
+      if (!existingUser) {
+        res.status(400).json({
+          success: false,
+          error: `User "${email}" has not been invited yet. Invite them first via POST /api/users/invite.`,
+        });
+        return;
+      }
+
       const projectUser = await storageAdapter.addUserToProject(
         req.params.projectId as string,
         email,

@@ -71,6 +71,7 @@ function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdap
     createProject: vi.fn(),
     getProject: vi.fn().mockResolvedValue(mockProject),
     getProjectByRepoSlug: vi.fn(),
+    getProjectByName: vi.fn(),
     listProjects: vi.fn().mockResolvedValue([mockProject]),
     updateProject: vi.fn(),
     deleteProject: vi.fn(),

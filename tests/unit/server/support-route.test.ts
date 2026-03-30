@@ -68,7 +68,7 @@ describe('POST /api/support/ticket', () => {
     mockAdapter = createMockAdapter();
     const app = express();
     app.use(express.json());
-    app.use('/api/support', supportRouter(mockAdapter));
+    app.use('/api/support', supportRouter({ issueAdapter: mockAdapter }));
     app.use(errorHandler);
     server = app.listen(0);
   });
@@ -116,7 +116,7 @@ describe('POST /api/support/ticket', () => {
 
     const app = express();
     app.use(express.json());
-    app.use('/api/support', supportRouter(failAdapter));
+    app.use('/api/support', supportRouter({ issueAdapter: failAdapter }));
     app.use(errorHandler);
     const failServer = app.listen(0);
 

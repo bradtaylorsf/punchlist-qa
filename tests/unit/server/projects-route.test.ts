@@ -78,6 +78,7 @@ function createMockStorage(overrides: Partial<StorageAdapter> = {}): StorageAdap
     createProject: vi.fn().mockResolvedValue(mockProject),
     getProject: vi.fn().mockResolvedValue(mockProject),
     getProjectByRepoSlug: vi.fn().mockResolvedValue(mockProject),
+    getProjectByName: vi.fn().mockResolvedValue(mockProject),
     listProjects: vi.fn().mockResolvedValue([mockProject]),
     updateProject: vi.fn().mockResolvedValue(mockProject),
     deleteProject: vi.fn().mockResolvedValue(undefined),
@@ -295,7 +296,9 @@ describe('projects routes', () => {
 
   describe('POST /api/projects/:projectId/users', () => {
     it('should add a user to a project for admin users', async () => {
-      const storage = createMockStorage();
+      const storage = createMockStorage({
+        getUserByEmail: vi.fn().mockResolvedValue(mockTesterUser),
+      });
       createServer(storage, mockAdminUser);
 
       const res = await makeRequest(server, 'POST', '/api/projects/project-1/users', {
