@@ -3,6 +3,7 @@ import type { StorageAdapter } from '../../adapters/storage/types.js';
 import { z } from 'zod';
 import { updateProjectInputSchema } from '../../shared/schemas.js';
 import { requireAdmin } from '../middleware/require-admin.js';
+import { generateToken, hashToken, buildInviteUrl } from '../auth/invite.js';
 
 /**
  * Parse a GitHub URL or repo slug into a normalized `owner/repo` slug.
@@ -32,7 +33,7 @@ const createProjectBodySchema = z.object({
   name: z.string().min(1).optional(),
 });
 
-export function projectsRouter(storageAdapter: StorageAdapter): Router {
+export function projectsRouter(storageAdapter: StorageAdapter, sessionSecret: string): Router {
   const router = Router();
 
   // List projects — users see their projects, admins see all
@@ -117,22 +118,34 @@ export function projectsRouter(storageAdapter: StorageAdapter): Router {
   });
 
   // Add user to project (admin only)
+  // Auto-invites the user if they don't exist yet, returns invite URL for new users.
   router.post('/:projectId/users', requireAdmin, async (req, res, next) => {
     try {
-      const { email, role } = req.body;
+      const { email, name, role } = req.body;
       if (!email) {
         res.status(400).json({ success: false, error: 'email is required' });
         return;
       }
 
-      // Verify the user exists before adding to project (foreign key constraint)
-      const existingUser = await storageAdapter.getUserByEmail(email);
+      let inviteUrl: string | undefined;
+      let existingUser = await storageAdapter.getUserByEmail(email);
+
+      // Auto-invite: create the user if they don't exist
       if (!existingUser) {
-        res.status(400).json({
-          success: false,
-          error: `User "${email}" has not been invited yet. Invite them first via POST /api/users/invite.`,
+        const token = generateToken(sessionSecret, email);
+        const tokenHash = hashToken(token);
+        existingUser = await storageAdapter.createUser({
+          email,
+          name: name ?? email.split('@')[0],
+          tokenHash,
+          role: role ?? 'tester',
+          invitedBy: req.user!.email,
         });
-        return;
+
+        const baseUrl =
+          req.headers.origin ??
+          `${req.protocol}://${req.get('host') ?? 'localhost:4747'}`;
+        inviteUrl = buildInviteUrl(String(baseUrl), token);
       }
 
       const projectUser = await storageAdapter.addUserToProject(
@@ -140,7 +153,7 @@ export function projectsRouter(storageAdapter: StorageAdapter): Router {
         email,
         role,
       );
-      res.status(201).json({ success: true, data: projectUser });
+      res.status(201).json({ success: true, data: projectUser, inviteUrl });
     } catch (err) {
       next(err);
     }

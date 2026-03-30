@@ -109,7 +109,7 @@ export function createApp(deps: AppDependencies): Express {
     const defaultProject = defaultProjectContext(storage);
 
     // --- Project CRUD routes ---
-    app.use('/api/projects', requireAuth, projectsRouter(storage));
+    app.use('/api/projects', requireAuth, projectsRouter(storage, sessionSecret));
 
     // --- Project-scoped data routes ---
     const projectScope = requireProjectContext(storage);

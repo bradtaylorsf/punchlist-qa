@@ -22,9 +22,12 @@ export function ProjectMembersSection({
   onError,
 }: ProjectMembersSectionProps) {
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
   const [role, setRole] = useState('tester');
   const [adding, setAdding] = useState(false);
   const [removingKey, setRemovingKey] = useState<string | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function loadMembers(): Promise<ProjectUser[]> {
     try {
@@ -39,9 +42,15 @@ export function ProjectMembersSection({
     const trimmed = email.trim();
     if (!trimmed) return;
     setAdding(true);
+    setInviteUrl(null);
+    setCopied(false);
     try {
-      await api.addProjectUser(projectId, trimmed, role);
+      const res = await api.addProjectUser(projectId, trimmed, role, name.trim() || undefined);
       setEmail('');
+      setName('');
+      if (res.inviteUrl) {
+        setInviteUrl(res.inviteUrl);
+      }
       const updated = await loadMembers();
       onMembersChanged(updated);
     } catch (err) {
@@ -64,8 +73,36 @@ export function ProjectMembersSection({
     }
   }
 
+  function handleCopy() {
+    if (!inviteUrl) return;
+    navigator.clipboard.writeText(inviteUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    });
+  }
+
   return (
     <>
+      {/* Invite URL banner */}
+      {inviteUrl && (
+        <div className="mx-4 mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+          <p className="text-sm font-medium text-green-800 mb-1">
+            New user invited! Share this link so they can set their password:
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs bg-white px-2 py-1.5 rounded border border-green-200 text-green-900 overflow-x-auto whitespace-nowrap">
+              {inviteUrl}
+            </code>
+            <button
+              onClick={handleCopy}
+              className="shrink-0 px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Members table */}
       {members.length > 0 && (
         <table className="w-full text-sm">
@@ -109,13 +146,23 @@ export function ProjectMembersSection({
       {/* Add member form */}
       <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-end gap-3">
         <div className="flex-1">
-          <label className="block text-xs text-gray-500 mb-1">Add member by email</label>
+          <label className="block text-xs text-gray-500 mb-1">Email</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm"
             placeholder="user@example.com"
+          />
+        </div>
+        <div className="w-32">
+          <label className="block text-xs text-gray-500 mb-1">Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-sm"
+            placeholder="Optional"
           />
         </div>
         <div>
