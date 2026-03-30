@@ -8,12 +8,13 @@ import type { Request, Response, NextFunction } from 'express';
  * Rejects unmatched origins by not setting any CORS headers (browser blocks).
  */
 export function corsMiddleware(allowedOrigins: string[]) {
+  const allowAll = allowedOrigins.includes('*');
   const originSet = new Set(allowedOrigins);
 
   return (req: Request, res: Response, next: NextFunction): void => {
     const origin = req.headers.origin;
 
-    if (!origin || !originSet.has(origin)) {
+    if (!origin || (!allowAll && !originSet.has(origin))) {
       // No origin header or origin not allowed — skip CORS headers.
       // For non-preflight requests, let them through (same-origin or server-to-server).
       // For preflight, the browser will block due to missing headers.
