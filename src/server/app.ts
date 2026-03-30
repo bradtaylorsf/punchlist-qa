@@ -115,7 +115,13 @@ export function createApp(deps: AppDependencies): Express {
     const projectScope = requireProjectContext(storage);
     app.use('/api/projects/:projectId/rounds', requireAuth, projectScope, roundsRouter(storage));
     app.use('/api/projects/:projectId/rounds', requireAuth, projectScope, resultsRouter(storage));
-    app.use('/api/projects/:projectId/issues', requireAuth, projectScope, issuesRouter(deps.issueAdapter));
+    const issuesDeps = {
+      issueAdapter: deps.issueAdapter,
+      issueAdapterRegistry: deps.issueAdapterRegistry,
+      storageAdapter: storage,
+      encryptionSecret: sessionSecret,
+    };
+    app.use('/api/projects/:projectId/issues', requireAuth, projectScope, issuesRouter(issuesDeps));
     app.use(
       '/api/projects/:projectId/access-requests',
       requireAuth,
@@ -142,7 +148,7 @@ export function createApp(deps: AppDependencies): Express {
     app.use('/api/rounds', requireAuth, defaultProject, roundsRouter(storage));
     app.use('/api/rounds', requireAuth, defaultProject, resultsRouter(storage));
     app.use('/api/config', requireAuth, defaultProject, configRouter({ config: deps.config, storageAdapter: storage }));
-    app.use('/api/issues', requireAuth, defaultProject, issuesRouter(deps.issueAdapter));
+    app.use('/api/issues', requireAuth, defaultProject, issuesRouter(issuesDeps));
     app.use('/api/commit', requireAuth, commitRouter());
     app.use('/api/users', requireAuth, usersRouter(storage, sessionSecret));
     app.use(
