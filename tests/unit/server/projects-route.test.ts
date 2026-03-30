@@ -155,7 +155,7 @@ describe('projects routes', () => {
     const app = express();
     app.use(express.json());
     app.use(injectUser(user));
-    app.use('/api/projects', projectsRouter(storage));
+    app.use('/api/projects', projectsRouter(storage, 'test-secret'));
     app.use(errorHandler);
     server = app.listen(0);
     return server;
@@ -295,7 +295,7 @@ describe('projects routes', () => {
   });
 
   describe('POST /api/projects/:projectId/users', () => {
-    it('should add a user to a project for admin users', async () => {
+    it('should add an existing user to a project for admin users', async () => {
       const storage = createMockStorage({
         getUserByEmail: vi.fn().mockResolvedValue(mockTesterUser),
       });
@@ -308,9 +308,43 @@ describe('projects routes', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
+      expect(res.body.inviteUrl).toBeUndefined();
+      expect(storage.createUser).not.toHaveBeenCalled();
       expect(storage.addUserToProject).toHaveBeenCalledWith(
         'project-1',
         'tester@example.com',
+        'tester',
+      );
+    });
+
+    it('should auto-invite a new user and return invite URL', async () => {
+      const storage = createMockStorage({
+        getUserByEmail: vi.fn().mockResolvedValue(null),
+        createUser: vi.fn().mockResolvedValue(mockTesterUser),
+      });
+      createServer(storage, mockAdminUser);
+
+      const res = await makeRequest(server, 'POST', '/api/projects/project-1/users', {
+        email: 'newuser@example.com',
+        name: 'New User',
+        role: 'tester',
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.inviteUrl).toBeDefined();
+      expect(typeof res.body.inviteUrl).toBe('string');
+      expect(storage.createUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'newuser@example.com',
+          name: 'New User',
+          role: 'tester',
+          invitedBy: 'admin@example.com',
+        }),
+      );
+      expect(storage.addUserToProject).toHaveBeenCalledWith(
+        'project-1',
+        'newuser@example.com',
         'tester',
       );
     });

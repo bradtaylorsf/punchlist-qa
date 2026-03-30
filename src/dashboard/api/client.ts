@@ -327,12 +327,12 @@ export function listProjectUsers(projectId: string) {
   }>(`/projects/${projectId}/users`);
 }
 
-export function addProjectUser(projectId: string, email: string, role?: string) {
-  return request<{ success: boolean; data: Record<string, unknown> }>(
+export function addProjectUser(projectId: string, email: string, role?: string, name?: string) {
+  return request<{ success: boolean; data: Record<string, unknown>; inviteUrl?: string }>(
     `/projects/${projectId}/users`,
     {
       method: 'POST',
-      body: JSON.stringify({ email, role }),
+      body: JSON.stringify({ email, role, name }),
     },
   );
 }
