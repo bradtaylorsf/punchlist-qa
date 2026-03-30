@@ -3,6 +3,12 @@ export interface WidgetConfig {
   /** URL of the punchlist-qa server (e.g. "http://localhost:4747") */
   serverUrl: string;
 
+  /** Project ID (UUID) for hosted mode — routes issues to the correct GitHub repo */
+  projectId?: string;
+
+  /** Project name — alternative to projectId for convenience */
+  projectName?: string;
+
   /** Widget display variant */
   variant?: 'fab' | 'inline' | 'menu-item';
 

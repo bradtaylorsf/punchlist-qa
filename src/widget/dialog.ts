@@ -181,6 +181,8 @@ export class WidgetDialog {
       description: description || undefined,
       userName: userName || undefined,
       userEmail: userEmail || undefined,
+      projectId: this.config.projectId || undefined,
+      projectName: this.config.projectName || undefined,
       context,
     };
 
